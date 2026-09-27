@@ -1,4 +1,10 @@
-/** Interactive input helpers: raw keypress on a TTY, line-based when piped. */
+/**
+ * Interactive input helpers: raw keypress on a TTY, line-based when piped.
+ *
+ * Piped input is read through one permanent line-queue. A readline interface
+ * emits `line` events even with no listener attached, so per-call interfaces
+ * (or bare listeners) silently drop every line that arrives between prompts.
+ */
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
 import { stdin, stdout } from "node:process";
@@ -7,7 +13,43 @@ export function isInteractive(): boolean {
   return Boolean(stdin.isTTY && stdout.isTTY);
 }
 
+// ---- piped line queue ----------------------------------------------------
+
+const pendingLines: string[] = [];
+const waiting: Array<(value: string | null) => void> = [];
+let pipedClosed = false;
+let pipedHooked = false;
+
+function hookPiped(): void {
+  if (pipedHooked || stdin.isTTY) return;
+  pipedHooked = true;
+  const rl = readline.createInterface({ input: stdin, terminal: false });
+  rl.on("line", (line: string) => {
+    const resolve = waiting.shift();
+    if (resolve) resolve(line);
+    else pendingLines.push(line);
+  });
+  rl.on("close", () => {
+    pipedClosed = true;
+    while (waiting.length) waiting.shift()!(null);
+  });
+}
+
+/** Next piped line, or null on EOF. Lines arriving between prompts queue up. */
+export function readPipedLine(): Promise<string | null> {
+  hookPiped();
+  if (pendingLines.length) return Promise.resolve(pendingLines.shift()!);
+  if (pipedClosed || stdin.readableEnded || stdin.destroyed) return Promise.resolve(null);
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+// ---- prompts -------------------------------------------------------------
+
 export async function askLine(prompt: string): Promise<string> {
+  if (!stdin.isTTY) {
+    stdout.write(prompt);
+    return (await readPipedLine() ?? "").trim();
+  }
   const rl = readline.createInterface({ input: stdin, output: stdout });
   try {
     return (await rl.question(prompt)).trim();
@@ -18,6 +60,10 @@ export async function askLine(prompt: string): Promise<string> {
 
 /** Hidden input for secrets: the typed characters are never echoed. */
 export async function askHidden(prompt: string): Promise<string> {
+  if (!stdin.isTTY) {
+    stdout.write(prompt);
+    return (await readPipedLine() ?? "").trim();
+  }
   stdout.write(prompt);
   const sink = new Writable({ write(_chunk, _enc, cb) {
     cb();
@@ -33,7 +79,7 @@ export async function askHidden(prompt: string): Promise<string> {
 
 /**
  * Single-key prompt. On a TTY reads one keypress without Enter; when piped,
- * reads a line and uses its first character (test-friendly). Returns the
+ * reads a line from the queue and uses its first character. Returns the
  * fallback (or null) on EOF so callers can bail out.
  */
 export async function askKey(prompt: string, valid: string[], fallback?: string): Promise<string | null> {
@@ -65,23 +111,6 @@ export async function askKey(prompt: string, valid: string[], fallback?: string)
       }
     };
     stdin.on("data", onData);
-  });
-}
-
-/** Line-based read that resolves null on EOF (piped input exhausted). */
-export function readPipedLine(): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (stdin.readableEnded || stdin.destroyed) return resolve(null);
-    const rl = readline.createInterface({ input: stdin, output: stdout, terminal: false });
-    let settled = false;
-    const done = (value: string | null) => {
-      if (settled) return;
-      settled = true;
-      rl.close();
-      resolve(value);
-    };
-    rl.once("line", (line: string) => done(String(line)));
-    rl.once("close", () => done(null));
   });
 }
 

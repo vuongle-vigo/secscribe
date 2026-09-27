@@ -79,10 +79,18 @@ pick the simpler option and record it here).
 ## Review pipeline
 
 - **Batch user prompt**: numbered sentences `[1] …` under the post title,
-  plus a one-line reminder that quotes must be verbatim substrings and
-  placeholders must never appear in quotes/replacements. The system prompt is
-  the verbatim §6.3 text stored at `core/src/prompts/review-system.md`
-  (copied to `dist/prompts/` at build time).
+  followed by the §6.4 JSON schema embedded verbatim in every request — the
+  system prompt says "matching the provided schema", and without the schema
+  in the message GLM invents its own field names (`explanation_en` instead
+  of `reason_en`, etc.) and every batch dies in validation. `promptVersion`
+  hashes the system prompt + schema block so schema changes invalidate the
+  cache. The system prompt itself is the verbatim §6.3 text stored at
+  `core/src/prompts/review-system.md` (copied to `dist/prompts/` at build
+  time).
+- **Suggestion attribution at store time**: each suggestion/vocab item is
+  assigned to the sentence containing its quote (fallback: the batch's first
+  sentence) *before* the per-sentence cache entry is written, so cache-hit
+  reruns report the same line numbers as live runs.
 - **JSON extraction** tolerates markdown fences and surrounding commentary
   (slice first `{` … last `}`) before zod validation. One repair-retry
   (assistant reply echoed back + correction request); a still-invalid reply
@@ -130,8 +138,11 @@ pick the simpler option and record it here).
 ## CLI
 
 - **Interactive keys**: raw single keypress on a TTY (`y`/`n`/`a`/`q`, `1–4`);
-  line-based when stdin is piped (first character of each line), which is
-  what the e2e tests drive. EOF degrades to the safe default (skip / quit).
+  line-based when stdin is piped. Piped lines go through one permanent
+  line-queue — readline emits `line` events even with no listener attached,
+  so per-call interfaces silently drop every line arriving between prompts
+  (only the first key registers and the rest fall back to "n"). EOF degrades
+  to the safe default (skip / quit).
 - **`--read-only` and `--json`** write nothing — not even `history.jsonl`
   (interactive sessions record `applied`/`seen` per §10; `copied`/`dismissed`
   are reserved for the extension, M2).

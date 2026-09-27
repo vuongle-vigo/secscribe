@@ -24,7 +24,8 @@ export function writeWorkspaceSettings(settingsPath: string, settings: Settings)
 
 /** Suggested OpenAI-compatible endpoints for the init wizard. */
 export const ENDPOINT_SUGGESTIONS: Array<{ label: string; baseUrl: string; model: string }> = [
-  { label: "Z.ai GLM (example)", baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-4.6" },
+  { label: "Z.ai GLM Coding Plan", baseUrl: "https://api.z.ai/api/coding/paas/v4", model: "glm-4.6" },
+  { label: "Z.ai GLM (pay-as-you-go)", baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-4.6" },
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
 ];

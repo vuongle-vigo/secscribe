@@ -8,6 +8,11 @@ function tmp() {
   return mkdtempSync(join(tmpdir(), "secscribe-cfg-"));
 }
 
+/** Non-existent home settings path so tests never read the real ~/.secscribe. */
+function noHome() {
+  return join(tmp(), "no-home-settings.json");
+}
+
 const ENV_KEYS = ["SECSRIBE_API_KEY", "SECSRIBE_BASE_URL", "SECSRIBE_MODEL"] as const;
 afterEach(() => {
   for (const k of ENV_KEYS) delete process.env[k];
@@ -46,7 +51,7 @@ describe("config resolution (spec §4)", () => {
   });
 
   it("defaults match the spec", () => {
-    const cfg = resolveConfig({ workspaceRoot: null });
+    const cfg = resolveConfig({ workspaceRoot: null, homeSettingsPath: noHome() });
     expect(cfg.temperature).toBe(0.2);
     expect(cfg.explanationLanguage).toBe("vi");
     expect(cfg.newCardsPerDay).toBe(10);
@@ -62,7 +67,7 @@ describe("config resolution (spec §4)", () => {
     const ws = tmp();
     mkdirSync(join(ws, ".secscribe"), { recursive: true });
     writeFileSync(join(ws, ".secscribe", "settings.json"), JSON.stringify({ apiKey: "sk-leaked", baseUrl: "https://x.example/v1" }));
-    const cfg = resolveConfig({ workspaceRoot: ws });
+    const cfg = resolveConfig({ workspaceRoot: ws, homeSettingsPath: noHome() });
     expect(cfg.apiKey).toBeUndefined();
     expect(cfg.baseUrl).toBe("https://x.example/v1");
   });

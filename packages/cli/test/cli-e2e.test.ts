@@ -106,24 +106,26 @@ describe("CLI e2e", () => {
     const ws = makeWorkspace();
     const post = writePost(ws);
 
-    // 4 suggestions (heading + 3 prose): y, n, n, n → 1 applied; vocab cards
-    // decline via explicit n and EOF-default-no.
-    const r = await runCli(ws, ["review", "post.md"], "y\nn\nn\nn\nn\nn\n");
+    // 4 suggestions (heading + 3 prose): y, y, n, n → 2 applied (the shared
+    // readline must consume every piped key, not just the first); vocab cards
+    // decline via EOF-default-no.
+    const r = await runCli(ws, ["review", "post.md"], "y\ny\nn\nn\n");
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("applied 1 fix");
+    expect(r.stdout).toContain("applied 2 fix");
 
     const after = readFileSync(post, "utf8");
     expect(after).not.toBe(POST); // file changed
     expect(after).toContain("```bash\ncurl https://internal.example/api\n```"); // code intact
-    // the accepted fix is the first-by-line suggestion (the heading);
-    // the skipped prose sentence stays untouched
+    // the two accepted fixes are the first-by-line suggestions
     expect(after).toContain("# Phishing Notes!");
-    expect(after).toContain("The attacker use a payload.");
+    expect(after).toContain("the attacker use a payload.");
+    // the skipped suggestions leave their text untouched
+    expect(after).toContain("Two filters was bypassed.");
 
     const history = readFileSync(join(ws, ".secscribe", "history.jsonl"), "utf8");
     const records = history.trim().split("\n").map((l) => JSON.parse(l));
-    expect(records.filter((x) => x.action === "applied")).toHaveLength(1);
-    expect(records.filter((x) => x.action === "seen")).toHaveLength(3);
+    expect(records.filter((x) => x.action === "applied")).toHaveLength(2);
+    expect(records.filter((x) => x.action === "seen")).toHaveLength(2);
   }, 30000);
 
   it("review --read-only: prints suggestions, never writes", async () => {
@@ -146,6 +148,20 @@ describe("CLI e2e", () => {
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("file untouched");
     expect(readFileSync(post, "utf8")).toBe(before);
+  }, 30000);
+
+  it("ambiguous quote: user picks the occurrence", async () => {
+    const ws = makeWorkspace();
+    const doc = "# T\n\nDuplicated error here. Duplicated error here.\n";
+    writeFileSync(join(ws, "post.md"), doc);
+    // n skips the heading fix; y accepts the ambiguous one; 1 picks the
+    // first occurrence; vocab declines at EOF
+    const r = await runCli(ws, ["review", "post.md"], "n\ny\n1\n");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("occurs 2×");
+    const after = readFileSync(join(ws, "post.md"), "utf8");
+    // exactly one of the two occurrences was fixed
+    expect(after).toBe("# T\n\nduplicated error here. Duplicated error here.\n");
   }, 30000);
 
   it("cards add/list/due + export anki + status", async () => {

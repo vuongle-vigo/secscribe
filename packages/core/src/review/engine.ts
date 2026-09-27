@@ -18,12 +18,44 @@ import type { RawSuggestion, RawVocabulary } from "./schema.js";
 
 const PROMPT_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "prompts", "review-system.md");
 
+/**
+ * The response schema from spec §6.4, embedded in every user prompt — the
+ * system prompt says "matching the provided schema", so the schema must be
+ * provided or models invent their own field names.
+ */
+const SCHEMA_BLOCK = `Return STRICT JSON only, exactly this shape:
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "category": "grammar | word-choice | style | clarity | spelling",
+      "severity": "error | minor",
+      "original_quote": "exact verbatim substring of the source prose",
+      "replacement": "corrected text",
+      "reason_en": "short simple-English explanation, max 25 words",
+      "reason_vi": "giải thích tiếng Việt",
+      "alternatives": ["optional other phrasings"]
+    }
+  ],
+  "vocabulary": [
+    {
+      "term": "reconnaissance",
+      "phonetic": "/rɪˈkɒnɪsəns/",
+      "definition_en": "...",
+      "definition_vi": "...",
+      "example_from_text": "sentence from the post containing the term",
+      "synonyms": ["recon", "footprinting"],
+      "tags": ["security", "methodology"]
+    }
+  ]
+}`;
+
 export function reviewSystemPrompt(): string {
   return readFileSync(PROMPT_PATH, "utf8").trim();
 }
 
 export function promptVersion(): string {
-  return createHash("sha256").update(reviewSystemPrompt()).digest("hex").slice(0, 8);
+  return createHash("sha256").update(reviewSystemPrompt()).update(SCHEMA_BLOCK).digest("hex").slice(0, 8);
 }
 
 type SuggestionCategory = RawSuggestion["category"];
@@ -161,6 +193,12 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
       usage.requests++;
       usage.promptTokens += reply.usage.promptTokens;
       usage.completionTokens += reply.usage.completionTokens;
+      // Attribute each suggestion/vocab item to the sentence containing its
+      // quote (fallback: the batch's first sentence) BEFORE caching, so a
+      // later cache-hit run reports correct line numbers.
+      const sentenceOf = (quote: string) =>
+        batch.find((p) => p.sentence.text.includes(quote))?.sentence ?? batch[0]!.sentence;
+      const lowerTermOf = (term: string) => term.toLowerCase();
       for (const p of batch) {
         // Attribute batch usage evenly across its sentences for status reporting.
         const share = { p: Math.round(reply.usage.promptTokens / batch.length), c: Math.round(reply.usage.completionTokens / batch.length) };
@@ -169,8 +207,12 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
           model: config.model ?? "",
           usage: share,
           chars: p.sentence.text.length,
-          suggestions: reply.data.suggestions,
-          vocabulary: reply.data.vocabulary,
+          suggestions: reply.data.suggestions.filter((raw) => sentenceOf(raw.original_quote) === p.sentence),
+          vocabulary: reply.data.vocabulary.filter(
+            (v) =>
+              (batch.find((q) => q.sentence.text.toLowerCase().includes(lowerTermOf(v.term)))?.sentence ??
+                batch[0]!.sentence) === p.sentence,
+          ),
         };
         cache.set(p.key, entry);
       }
@@ -271,7 +313,9 @@ async function reviewBatch(
     "Sentences from the post:",
     ...body,
     "",
-    "Return STRICT JSON matching the schema. Every original_quote must be an exact verbatim substring of the sentences above. Never include placeholders like ⟦C1⟧ in original_quote or replacement.",
+    SCHEMA_BLOCK,
+    "",
+    "Every original_quote must be an exact verbatim substring of the sentences above. Never include placeholders like ⟦C1⟧ in original_quote or replacement. No markdown fences, no commentary — JSON only.",
   ].join("\n");
 
   const messages: ChatMessage[] = [
@@ -302,7 +346,7 @@ async function reviewBatch(
       { role: "assistant", content: first.slice(0, 4000) },
       {
         role: "user",
-        content: `Your previous reply was not valid JSON matching the schema (${parsed.issues.join("; ")}). Return ONLY the corrected JSON object — no markdown fences, no commentary.`,
+        content: `Your previous reply was not valid JSON matching the schema (${parsed.issues.join("; ")}). ${SCHEMA_BLOCK}\n\nReturn ONLY the corrected JSON object — no markdown fences, no commentary.`,
       },
     ]);
     parsed = parseReviewResponse(repair.content);

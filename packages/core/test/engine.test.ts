@@ -193,6 +193,30 @@ describe("review engine (spec §6)", () => {
     }
   });
 
+  it("cached reruns report the same lines as the live run (attribution survives cache)", async () => {
+    const fake = await startFakeServer(echoResponder());
+    const cache = new ReviewCache(null);
+    const cfg = config({ baseUrl: fake.url });
+    const text = "# Heading line\n\nThe attacker use a payload.\n\nAnother sentence exists.";
+    try {
+      const r1 = await reviewDocument({ text, file: "x.md", config: cfg, cache, llm: undefined as never });
+      const r2 = await reviewDocument({
+        text,
+        file: "x.md",
+        config: cfg,
+        cache,
+        llm: () => {
+          throw new Error("cache must cover the whole rerun");
+        },
+      });
+      expect(r1.suggestions.map((s) => [s.id, s.line])).toEqual(r2.suggestions.map((s) => [s.id, s.line]));
+      const prose = r2.suggestions.find((s) => s.originalQuote.includes("attacker"));
+      expect(prose?.line).toBe(3); // the sentence's line, not the heading's
+    } finally {
+      await fake.close();
+    }
+  });
+
   it("cache short-circuits: unchanged sentences are never re-sent", async () => {
     const fake = await startFakeServer(echoResponder());
     const cache = new ReviewCache(null);
