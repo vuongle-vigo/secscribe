@@ -1,0 +1,28 @@
+{
+  "name": "@secscribe/core",
+  "version": "0.1.0",
+  "description": "SecScribe core library: markdown-safe review pipeline, vocabulary, SRS, storage",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b && mkdir -p dist/prompts && cp src/prompts/*.md dist/prompts/",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "fast-check": "^3.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

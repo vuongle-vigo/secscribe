@@ -1,0 +1,17 @@
+```json
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "category": "spelling",
+      "severity": "error",
+      "original_quote": "recieve",
+      "replacement": "receive",
+      "reason_en": "i before e except after c.",
+      "reason_vi": "Đánh vần đúng là receive.",
+      "alternatives": []
+    }
+  ],
+  "vocabulary": []
+}
+```

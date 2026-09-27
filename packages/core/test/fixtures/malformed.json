@@ -1,0 +1,12 @@
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "category": "grammar",
+      "severity": "error",
+      "original_quote": "the key",
+      "replacement": "the keys",
+      "reason_en": "missing reason_vi to trigger a schema failure"
+    }
+  ]
+}

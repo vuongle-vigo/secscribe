@@ -1,0 +1,35 @@
+{
+  "suggestions": [
+    {
+      "id": "s1",
+      "category": "grammar",
+      "severity": "error",
+      "original_quote": "The attacker use a payload",
+      "replacement": "The attacker used a payload",
+      "reason_en": "Past events need past tense: use → used.",
+      "reason_vi": "Sự việc đã xảy ra cần thì quá khứ: use → used.",
+      "alternatives": ["The attacker sent a payload"]
+    },
+    {
+      "id": "s2",
+      "category": "word-choice",
+      "severity": "minor",
+      "original_quote": "find a way to bypass",
+      "replacement": "identify a way to bypass",
+      "reason_en": "In reports, 'identify' is more precise than 'find'.",
+      "reason_vi": "Trong báo cáo, 'identify' chính xác hơn 'find'.",
+      "alternatives": []
+    }
+  ],
+  "vocabulary": [
+    {
+      "term": "reconnaissance",
+      "phonetic": "/rɪˈkɒnɪsəns/",
+      "definition_en": "Exploring a target to gather information before an attack.",
+      "definition_vi": "Trinh sát mục tiêu để thu thập thông tin trước khi tấn công.",
+      "example_from_text": "Reconnaissance revealed three open ports.",
+      "synonyms": ["recon", "footprinting"],
+      "tags": ["security", "methodology"]
+    }
+  ]
+}

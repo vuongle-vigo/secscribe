@@ -1,0 +1,25 @@
+{
+  "name": "@secscribe/cli",
+  "version": "0.1.0",
+  "description": "SecScribe CLI — English review and vocabulary drills for security blog posts",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "secscribe": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@secscribe/core": "workspace:*",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
