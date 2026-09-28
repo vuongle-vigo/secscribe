@@ -87,11 +87,13 @@ The panel has three tabs:
 - **Study** — cloze flashcards from your own sentences: Space = reveal,
   1–4 = Again/Hard/Good/Easy, progress bar, session summary.
 
-Plus a gutter dot on lines with pending suggestions
-(`secScribe.highlightInEditor`) and a `SecScribe: N due` status bar item
-(`secScribe.showStatusBar`). Settings: everything from the spec under the
-`secScribe.*` prefix; the API key lives in VS Code SecretStorage (prompted
-on first review).
+Plus a **SecScribe icon in the Activity Bar** — a sidebar view with
+Vocabulary + Study always one click away (no document tab needed), a gutter
+dot on lines with pending suggestions (`secScribe.highlightInEditor`), and a
+`SecScribe: N due` status bar item (`secScribe.showStatusBar`). Review
+shortcut: **Cmd+Alt+S / Ctrl+Alt+S** on a Markdown file. Settings:
+everything from the spec under the `secScribe.*` prefix; the API key lives
+in VS Code SecretStorage (prompted on first review).
 
 ## How code stays safe
 

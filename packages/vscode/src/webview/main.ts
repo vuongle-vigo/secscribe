@@ -115,6 +115,10 @@ const app = document.getElementById("app")!;
 // ---- webview state -----------------------------------------------------------
 
 type Tab = "suggestions" | "vocabulary" | "study";
+type Surface = "panel" | "sidebar";
+/** "panel": all three tabs (beside-editor review surface). "sidebar": the
+ * activity-bar view — Vocabulary + Study only, Suggestions stay in the panel. */
+let surface: Surface = "panel";
 let activeTab: Tab = "suggestions";
 let review: PanelPayload | null = null;
 let vocabulary: VocabularyPayload | null = null;
@@ -149,10 +153,21 @@ function post(msg: unknown): void {
 
 function renderShell(content: string): void {
   const tabs: Array<{ id: Tab; label: string; badge?: string }> = [
-    { id: "suggestions", label: "Suggestions", badge: review ? String(review.suggestions.length) : undefined },
+    surface === "panel"
+      ? { id: "suggestions", label: "Suggestions", badge: review ? String(review.suggestions.length) : undefined }
+      : null,
     { id: "vocabulary", label: "Vocabulary", badge: vocabulary ? String(vocabulary.cards.length) : undefined },
-    { id: "study", label: "Study", badge: studyP && studyP.state !== "summary" && studyP.total > 0 ? `${studyP.index + 1}/${studyP.total}` : studyP?.remainingDue ? `${studyP.remainingDue} due` : undefined },
-  ];
+    {
+      id: "study",
+      label: "Study",
+      badge:
+        studyP && studyP.state !== "summary" && studyP.total > 0
+          ? `${studyP.index + 1}/${studyP.total}`
+          : studyP?.remainingDue
+            ? `${studyP.remainingDue} due`
+            : undefined,
+    },
+  ].filter((t): t is { id: Tab; label: string; badge?: string } => t !== null);
   const toastHtml = toast
     ? `<div class="toast ${toast.kind === "error" ? "toast-error" : ""}">${esc(toast.message)}</div>`
     : "";
@@ -392,9 +407,13 @@ function render(): void {
     activeTab === "suggestions" ? renderSuggestions() : activeTab === "vocabulary" ? renderVocabulary() : renderStudy();
   renderShell(content);
   wireEvents();
-  // The ack describes the suggestions payload (not the visible tab) so the
-  // extension/test can always observe the current suggestion count.
-  post({ type: "rendered", items: review?.suggestions.length ?? 0, firstLine: review?.suggestions[0]?.line });
+  if (surface === "panel") {
+    // The ack describes the suggestions payload (not the visible tab) so the
+    // extension/test can always observe the current suggestion count.
+    post({ type: "rendered", items: review?.suggestions.length ?? 0, firstLine: review?.suggestions[0]?.line });
+  } else {
+    post({ type: "sidebarRendered", tab: activeTab, cards: vocabulary?.cards.length ?? 0 });
+  }
   const input = app.querySelector<HTMLInputElement>(".practice-input");
   if (input) input.focus();
   const search = app.querySelector<HTMLInputElement>(".search");
@@ -534,6 +553,11 @@ window.addEventListener("message", (ev: MessageEvent) => {
       return;
     case "setTab":
       activeTab = msg.tab as Tab;
+      render();
+      return;
+    case "surface":
+      surface = (msg.surface as Surface) ?? "panel";
+      if (surface === "sidebar" && activeTab === "suggestions") activeTab = "vocabulary";
       render();
       return;
   }

@@ -48,6 +48,7 @@ async function main(): Promise<void> {
         SECSRIBE_YES: "1",
         NO_COLOR: "1",
         SECSRIBE_TEST_WS: ws,
+        SECSRIBE_TEST_EXT: PKG_ROOT,
       },
     });
   } catch (err) {

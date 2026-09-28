@@ -27,6 +27,7 @@ import { toPanelPayload, type PanelPayload, type PanelSuggestion } from "./seria
 import { StudyController } from "./study.js";
 import { VocabularyService } from "./vocab.js";
 import { applySuggestion } from "./apply.js";
+import { SecScribeSidebar } from "./sidebar.js";
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log("[secscribe] activating extension");
@@ -94,9 +95,22 @@ function activateInner(context: vscode.ExtensionContext): void {
     statusBar.show();
   }
 
-  // ---- panel ----------------------------------------------------------------
+  // ---- panel + sidebar --------------------------------------------------------
 
   const panel = new SecScribePanel(context, { onMessage: handlePanelMessage });
+  const sidebar = new SecScribeSidebar(context, {
+    onMessage: handlePanelMessage,
+    onReady: () => {
+      postVocabulary();
+      pushStudy(study.payload());
+    },
+  });
+  /** Vocabulary/study state goes to BOTH surfaces (panel + sidebar). */
+  const pushBoth = (payload: unknown): void => {
+    panel.post(payload);
+    sidebar.post(payload);
+  };
+  const pushStudy = (payload: unknown): void => pushBoth(payload);
 
   function currentPayload(): PanelPayload {
     const run = lastRun!;
@@ -110,7 +124,7 @@ function activateInner(context: vscode.ExtensionContext): void {
   }
 
   function postVocabulary(): void {
-    panel.post({ type: "vocabulary", cards: getVocab().cards(), pending: getVocab().pendingList() });
+    pushBoth({ type: "vocabulary", cards: getVocab().cards(), pending: getVocab().pendingList() });
   }
 
   function rerender(tab?: "suggestions" | "vocabulary" | "study"): void {
@@ -277,7 +291,7 @@ function activateInner(context: vscode.ExtensionContext): void {
       }
       case "vocabDefine": {
         const ok = await defineAndMerge(msg.term);
-        panel.post({
+        pushBoth({
           type: "toast",
           message: ok ? `meaning of “${msg.term}” added` : `could not define “${msg.term}” — check the endpoint`,
           kind: ok ? "info" : "error",
@@ -300,14 +314,14 @@ function activateInner(context: vscode.ExtensionContext): void {
         return;
       }
       case "studyStart":
-        panel.post(study.start());
+        pushStudy(study.start());
         refreshStatusBar();
         return;
       case "studyReveal":
-        panel.post(study.reveal());
+        pushStudy(study.reveal());
         return;
       case "studyRate":
-        panel.post(study.rate(msg.rating));
+        pushStudy(study.rate(msg.rating));
         refreshStatusBar();
         return;
     }
@@ -399,8 +413,11 @@ function activateInner(context: vscode.ExtensionContext): void {
       };
       lastReviewPayload = currentPayload();
     }
-    rerender("study");
-    panel.post(study.start());
+    // Study lives in the sidebar now — reveal it and start the session there
+    // (an open panel's Study tab updates too via the shared push).
+    sidebar.show();
+    rerender();
+    pushStudy(study.start());
   });
 
   const exportAnki = vscode.commands.registerCommand("secscribe.exportAnki", async (uri?: vscode.Uri) => {
@@ -433,6 +450,7 @@ function activateInner(context: vscode.ExtensionContext): void {
     vocabularyCards: vocabService?.cards().map((c) => ({ term: c.term, hasDefinition: Boolean(c.definitionEn) })) ?? [],
     study: study.payload(),
     statusBarText: statusBar.text,
+    sidebar: sidebar.state,
   }));
   const testPostMessage = vscode.commands.registerCommand("secscribe.test.postMessage", (msg: PanelMessage) =>
     panel.handleMessage(msg),
@@ -460,6 +478,9 @@ function activateInner(context: vscode.ExtensionContext): void {
     openSettings,
     testGetState,
     testPostMessage,
+    // retainContextWhenHidden: a study session in the sidebar must survive
+    // collapsing the activity-bar view.
+    vscode.window.registerWebviewViewProvider("secscribe.sidebar", sidebar, { webviewOptions: { retainContextWhenHidden: true } }),
   );
   refreshStatusBar();
 }

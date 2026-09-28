@@ -21,6 +21,7 @@ interface State {
   vocabularyCards: Array<{ term: string; hasDefinition: boolean }>;
   study: { state: string; index: number; total: number; counts: Record<string, number>; remainingDue: number; card: { term: string; front: string } | null };
   statusBarText: string;
+  sidebar: { visible: boolean; rendered: { tab: string; cards: number } | null } | null;
 }
 
 const ws = process.env["SECSRIBE_TEST_WS"] ?? "";
@@ -216,5 +217,44 @@ suite("SecScribe M3 smoke", () => {
     }
     const vocabCount = readVocab().cards.length;
     assert.strictEqual(rows.length, vocabCount, "one row per card");
+  });
+
+  test("sidebar: vocabulary + study live in the activity-bar view; review has a keybinding", async () => {
+    // Manifest: the review command is bound to a chord for markdown files.
+    const extRoot = process.env["SECSRIBE_TEST_EXT"] ?? "";
+    if (extRoot) {
+      const manifest = JSON.parse(readFileSync(join(extRoot, "package.json"), "utf8"));
+      const binding = manifest.contributes.keybindings.find(
+        (k: { command: string }) => k.command === "secscribe.reviewFile",
+      );
+      assert.ok(binding, "reviewFile keybinding contributed");
+      assert.strictEqual(binding.when, "resourceLangId == markdown");
+      assert.ok(manifest.contributes.viewsContainers.activitybar[0].id === "secscribe");
+      assert.ok(manifest.contributes.views.secscribe.some((v: { id: string }) => v.id === "secscribe.sidebar"));
+    }
+
+    await vscode.commands.executeCommand("secscribe.sidebar.focus");
+    const state = await waitFor(
+      (s) => s.sidebar !== null && s.sidebar.visible && s.sidebar.rendered !== null,
+      "sidebar view rendered",
+    );
+    // Vocabulary + Study only — the sidebar never shows Suggestions.
+    assert.ok(["vocabulary", "study"].includes(state.sidebar!.rendered!.tab), "no suggestions tab in sidebar");
+    assert.ok(state.sidebar!.rendered!.cards >= 1, "vocab cards listed in the sidebar");
+
+    // Study started from the sidebar's surface shares the same controller.
+    // (Earlier tests drained every due card, so create a fresh one first.)
+    await post({ type: "vocabAddManual", term: "sidebar smoke term" });
+    await waitFor((s) => s.vocabularyCards.some((c) => c.term === "sidebar smoke term"), "fresh card added");
+    await post({ type: "studyStart" });
+    await waitFor((s) => s.study.state === "question" && s.study.total > 0, "study session from the sidebar");
+    // Drain the session so the suite ends clean.
+    for (let guard = 0; guard < 50; guard++) {
+      const s = await getState();
+      if (s.study.state === "summary" || s.study.state === "idle") break;
+      if (s.study.state === "question") await post({ type: "studyReveal" });
+      else await post({ type: "studyRate", rating: "easy" });
+      await sleep(150);
+    }
   });
 });

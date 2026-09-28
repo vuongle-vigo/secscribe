@@ -7,11 +7,13 @@
 import * as vscode from "vscode";
 import type { PanelPayload } from "./serialize.js";
 import type { PanelStudy } from "./study.js";
+import { buildWebviewHtml } from "./webviewHtml.js";
 
 /** webview → extension messages. */
 export type PanelMessage =
   | { type: "ready" }
   | { type: "rendered"; items: number; firstLine?: number }
+  | { type: "sidebarRendered"; tab: string; cards: number }
   | { type: "tab"; tab: "suggestions" | "vocabulary" | "study" }
   | { type: "copy"; id: string }
   | { type: "goto"; id: string; line: number }
@@ -183,22 +185,6 @@ export class SecScribePanel {
   }
 
   private html(webview: vscode.Webview): string {
-    const nonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    const script = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "main.js"));
-    const style = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "styles.css"));
-    const csp = ["default-src 'none'", `style-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join("; ");
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-<link rel="stylesheet" href="${style}">
-<title>SecScribe</title>
-</head>
-<body>
-<div id="app" class="loading">Loading SecScribe…</div>
-<script nonce="${nonce}" src="${script}"></script>
-</body>
-</html>`;
+    return buildWebviewHtml(this.context, webview);
   }
 }

@@ -288,6 +288,28 @@ dictionary lookup:
   definition-less card); `cards add` stays offline and prints a hint.
 - Cost note: each define is one small LLM request per term.
 
+## Sidebar + keybinding (post-M3 UX)
+
+Surfaces mapped to their natural lifetime:
+
+- **Suggestions stay in the beside-editor panel** — per-file, transient,
+  needs width for word-level diffs.
+- **Vocabulary + Study moved into an activity-bar sidebar view**
+  (`secscribe` container, `secscribe.sidebar` webview view): long-lived,
+  quick frequent sessions that must not steal a document tab. The sidebar
+  reuses the SAME webview bundle and message contract; a `{type:"surface"}`
+  message tells it to hide the Suggestions tab (it starts on Vocabulary).
+  Vocabulary/study/toast payloads are pushed to BOTH surfaces; suggestion-
+  specific posts (practice/apply results) go to the panel only. The view is
+  registered with `retainContextWhenHidden` so an in-progress study session
+  survives collapsing the sidebar. The panel keeps all three tabs (no
+  regression; either surface works).
+- **`SecScribe: Study now`** reveals the sidebar and starts the session
+  there (the status bar click lands in the sidebar now).
+- **Keybinding**: `Cmd+Alt+S` / `Ctrl+Alt+S` runs "Review current file",
+  scoped `resourceLangId == markdown`. Chosen over Cmd+Shift+E, which would
+  shadow the default "Show Explorer" chord; users can rebind.
+
 ## Testing
 
 - **Property test** uses an adversarial in-process LLM (seeded PRNG) that

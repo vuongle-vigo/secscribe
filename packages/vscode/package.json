@@ -2,7 +2,7 @@
   "name": "secscribe",
   "displayName": "SecScribe",
   "description": "English review and vocabulary coach for security blog posts (read-only suggestions panel)",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "publisher": "secscribe",
   "engines": {
@@ -17,6 +17,7 @@
     "onCommand:secscribe.addSelectionToVocabulary",
     "onCommand:secscribe.studyNow",
     "onCommand:secscribe.exportAnki",
+    "onView:secscribe.sidebar",
     "workspaceContains:**/.secscribe/**"
   ],
   "contributes": {
@@ -48,6 +49,33 @@
       {
         "command": "secscribe.test.postMessage",
         "title": "SecScribe (test): post a panel message"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "secscribe",
+          "title": "SecScribe",
+          "icon": "media/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "secscribe": [
+        {
+          "type": "webview",
+          "id": "secscribe.sidebar",
+          "name": "Vocabulary & Study"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "secscribe.reviewFile",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s",
+        "when": "resourceLangId == markdown",
+        "title": "SecScribe: Review current file"
       }
     ],
     "configuration": {
