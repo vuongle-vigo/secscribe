@@ -231,6 +231,10 @@ suite("SecScribe M3 smoke", () => {
       assert.strictEqual(binding.when, "resourceLangId == markdown");
       assert.ok(manifest.contributes.viewsContainers.activitybar[0].id === "secscribe");
       assert.ok(manifest.contributes.views.secscribe.some((v: { id: string }) => v.id === "secscribe.sidebar"));
+      const ctx = manifest.contributes.menus?.["editor/context"]?.find(
+        (m: { command: string }) => m.command === "secscribe.addSelectionToVocabulary",
+      );
+      assert.ok(ctx, "selection command appears in the editor context menu");
     }
 
     await vscode.commands.executeCommand("secscribe.sidebar.focus");

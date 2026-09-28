@@ -119,7 +119,7 @@ body {
   border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px;
   font-family: inherit; font-size: 0.95em;
 }
-.search:focus, .practice-input:focus { border-color: var(--accent); outline: none; }
+.search:focus, .manual-add:focus, .practice-input:focus { border-color: var(--accent); outline: none; }
 
 /* ---- vocabulary ---- */
 /* One-line definitions in the table; full text on hover (title attr). */
@@ -162,7 +162,7 @@ body {
 .def-vi { color: var(--muted); }
 .quote { color: var(--muted); font-style: italic; margin: 4px 0; }
 .vocab-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.search {
+.search, .manual-add {
   flex: 1;
   background: var(--vscode-input-background, #222);
   color: var(--vscode-input-foreground, var(--fg));

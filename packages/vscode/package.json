@@ -78,6 +78,15 @@
         "title": "SecScribe: Review current file"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "secscribe.addSelectionToVocabulary",
+          "when": "editorHasSelection && resourceLangId == markdown",
+          "group": "secscribe@1"
+        }
+      ]
+    },
     "configuration": {
       "title": "SecScribe",
       "properties": {

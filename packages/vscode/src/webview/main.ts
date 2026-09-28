@@ -124,6 +124,8 @@ let review: PanelPayload | null = null;
 let vocabulary: VocabularyPayload | null = null;
 let studyP: StudyPayload | null = null;
 let vocabQuery = "";
+/** Manual add box state — survives re-renders. */
+let manualTerm = "";
 /** Practice state survives re-renders so typing is not lost. */
 let practice: { id: string; text: string; result?: PracticeResult } | null = null;
 let toast: { message: string; kind: "info" | "error" } | null = null;
@@ -375,6 +377,10 @@ function renderVocabulary(): string {
 <header class="head"><h1>Vocabulary</h1></header>
 ${pendingHtml}
 <div class="vocab-toolbar">
+  <input class="manual-add" data-action="vocabManualInput" placeholder="add a word or phrase…" value="${esc(manualTerm)}">
+  <button class="btn" data-action="vocabAddManual" ${manualTerm.trim() ? "" : "disabled"}>Add</button>
+</div>
+<div class="vocab-toolbar">
   <input class="search" data-action="vocabSearch" placeholder="search term or tag…" value="${esc(vocabQuery)}">
   <span class="muted">${cards.length}/${v.cards.length} card(s)</span>
 </div>
@@ -505,6 +511,15 @@ function wireEvents(): void {
         case "vocabDelete":
           post({ type: "vocabDelete", term: btn.dataset["term"]! });
           return;
+        case "vocabAddManual": {
+          const term = manualTerm.trim();
+          if (term) {
+            manualTerm = "";
+            post({ type: "vocabAddManual", term });
+            render();
+          }
+          return;
+        }
         case "vocabDefine":
           btn.disabled = true;
           post({ type: "vocabDefine", term: btn.dataset["term"]! });
@@ -530,6 +545,25 @@ function wireEvents(): void {
       if (ev.key === "Enter") {
         ev.preventDefault();
         if (practice) post({ type: "practice", id: practice.id, text: practice.text });
+      }
+    });
+  });
+
+  app.querySelectorAll<HTMLInputElement>(".manual-add").forEach((input) => {
+    input.addEventListener("input", () => {
+      manualTerm = input.value;
+      const addBtn = app.querySelector<HTMLButtonElement>('button[data-action="vocabAddManual"]');
+      if (addBtn) addBtn.disabled = manualTerm.trim() === "";
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const term = manualTerm.trim();
+        if (term) {
+          manualTerm = "";
+          post({ type: "vocabAddManual", term });
+          render();
+        }
       }
     });
   });
