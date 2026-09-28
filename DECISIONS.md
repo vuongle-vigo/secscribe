@@ -222,7 +222,6 @@ pick the simpler option and record it here).
   `vscode` module and run under @vscode/test-electron instead).
 
 ## VS Code extension (M3)
-
 - **Assisted apply (`applyMode: "assist"`)**: one "Apply fix" click per
   suggestion → the extension re-runs the exact-match search against the live
   document, re-verifies the quoted span, and applies a single `WorkspaceEdit`
@@ -268,6 +267,26 @@ pick the simpler option and record it here).
 - **Config diagnostics**: the activation-time layer log redacts the API key
   (`"***set***"`) — it briefly printed the real home key to the extension
   host log, violating acceptance #6.
+
+## Definition backfill (post-M3 addition)
+
+Manually added terms (selection command, `cards add`, panel input) and
+practice-derived cards carry no LLM definitions — the review pipeline only
+defines words it extracts itself. `core/vocab/define.ts` adds an on-demand
+dictionary lookup:
+
+- **`defineTerm(llm, term)`** sends ONLY the term (never document content)
+  to the configured endpoint with a bilingual-dictionary system prompt
+  (strict JSON, one repair-retry, then null). Merges fill empty fields only
+  via the store's existing `add()` merge; the dictionary example sentence is
+  stored as a `dictionary` source.
+- **Extension**: "Add selection to vocabulary" and the panel's manual add
+  auto-define in the background (status message on success); cards without
+  a meaning show a 📖 Define button in the Vocabulary tab. The §11 endpoint
+  confirmation gates the first define call like any other request.
+- **CLI**: `secscribe cards define <term>` (or no term = backfill every
+  definition-less card); `cards add` stays offline and prints a hint.
+- Cost note: each define is one small LLM request per term.
 
 ## Testing
 

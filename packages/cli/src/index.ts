@@ -39,11 +39,11 @@ program
 program
   .command("cards")
   .description("vocabulary cards")
-  .argument("<sub>", "list | add | due")
-  .argument("[term]", "term (for add)")
-  .action((sub: string, term?: string) => {
+  .argument("<sub>", "list | add | due | define")
+  .argument("[term]", "term (for add / define); omit with define to backfill all")
+  .action(async (sub: string, term?: string) => {
     const ctx = buildContext({});
-    runCards(ctx, sub, term);
+    await runCards(ctx, sub, term);
   });
 
 program

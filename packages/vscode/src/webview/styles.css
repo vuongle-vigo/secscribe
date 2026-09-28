@@ -81,6 +81,8 @@ body {
   font-size: 0.95em;
 }
 .btn:hover { background: var(--btn-hover); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.ghost:disabled { background: transparent; }
 .btn.ghost {
   background: transparent;
   color: var(--muted);

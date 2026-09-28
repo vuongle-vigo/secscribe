@@ -302,15 +302,21 @@ function renderVocabulary(): string {
       c.tags.some((t) => t.toLowerCase().includes(q)),
   );
   const rows = cards
-    .map(
-      (c) => `<tr>
-      <td class="term-cell">${esc(c.term)}${c.phonetic ? ` <span class="phonetic">${esc(c.phonetic)}</span>` : ""}</td>
+    .map((c) => {
+      const defs = c.definitionEn
+        ? `<div class="def muted">${esc(c.definitionEn)}</div>${c.definitionVi ? `<div class="def muted def-vi">${esc(c.definitionVi)}</div>` : ""}`
+        : `<div class="def muted small-text">no meaning yet</div>`;
+      const defineBtn = c.definitionEn
+        ? ""
+        : `<button class="btn ghost small" data-action="vocabDefine" data-term="${esc(c.term)}" title="Look up the bilingual meaning">📖 Define</button>`;
+      return `<tr>
+      <td class="term-cell">${esc(c.term)}${c.phonetic ? ` <span class="phonetic">${esc(c.phonetic)}</span>` : ""}${defs}</td>
       <td>${c.due ? `<span class="badge sev-minor">due</span>` : `<span class="muted">${esc(c.dueDate)}</span>`}</td>
       <td class="muted">${c.repetitions} · ${c.intervalDays}d</td>
       <td class="muted">${c.tags.map((t) => esc(t)).join(", ")}</td>
-      <td><button class="btn ghost small" data-action="vocabDelete" data-term="${esc(c.term)}">✕</button></td>
-    </tr>`,
-    )
+      <td>${defineBtn}<button class="btn ghost small" data-action="vocabDelete" data-term="${esc(c.term)}">✕</button></td>
+    </tr>`;
+    })
     .join("");
   return `
 <header class="head"><h1>Vocabulary</h1></header>
@@ -440,6 +446,10 @@ function wireEvents(): void {
           return;
         case "vocabDelete":
           post({ type: "vocabDelete", term: btn.dataset["term"]! });
+          return;
+        case "vocabDefine":
+          btn.disabled = true;
+          post({ type: "vocabDefine", term: btn.dataset["term"]! });
           return;
         case "studyStart":
           post({ type: "studyStart" });

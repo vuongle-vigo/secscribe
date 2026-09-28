@@ -18,6 +18,7 @@ interface State {
   appliedIds: string[];
   pendingVocabulary: Array<{ key: string; term: string }>;
   vocabularyTerms: string[];
+  vocabularyCards: Array<{ term: string; hasDefinition: boolean }>;
   study: { state: string; index: number; total: number; counts: Record<string, number>; remainingDue: number; card: { term: string; front: string } | null };
   statusBarText: string;
 }
@@ -150,6 +151,14 @@ suite("SecScribe M3 smoke", () => {
     await vscode.commands.executeCommand("secscribe.addSelectionToVocabulary");
     const selState = await waitFor((s) => s.vocabularyTerms.includes(word), "selection card added");
     assert.ok(selState.vocabularyTerms.includes(word));
+
+    // The meaning is backfilled automatically (only the term is sent).
+    await waitFor(
+      (s) => s.vocabularyCards.some((c) => c.term === word && c.hasDefinition),
+      "auto-define after selection add",
+    );
+    const definedCard = readVocab().cards.find((c) => c.term === word);
+    assert.ok(definedCard!.sources.some((src) => src.file === "dictionary"), "dictionary example as source");
 
     // Adding the same term again merges sources (acceptance #3).
     await vscode.commands.executeCommand("secscribe.addSelectionToVocabulary");

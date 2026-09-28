@@ -12,6 +12,7 @@ export * from "./vocab/srs.js";
 export * from "./vocab/cards.js";
 export * from "./vocab/cloze.js";
 export * from "./vocab/anki.js";
+export * from "./vocab/define.js";
 export * from "./storage/history.js";
 export * from "./storage/privacy.js";
 export * from "./init.js";

@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdi
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { echoResponder, startFakeServer, type FakeServer } from "../../core/test/helpers/fake-server.js";
+import { echoResponder, startFakeServer, withDefine, type FakeServer } from "../../core/test/helpers/fake-server.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "index.js");
 
@@ -28,7 +28,7 @@ const POST = [
 let fake: FakeServer;
 
 beforeAll(async () => {
-  fake = await startFakeServer(echoResponder());
+  fake = await startFakeServer(withDefine(echoResponder()));
 });
 afterAll(async () => {
   await fake.close();
@@ -192,6 +192,25 @@ describe("CLI e2e", () => {
     expect(status.stdout).toContain("cards: 1");
     expect(status.stdout).toContain("1 due");
     expect(status.stdout).toContain("endpoint:");
+  }, 30000);
+
+  it("cards define: backfills a bilingual meaning from the endpoint", async () => {
+    const ws = makeWorkspace();
+    const add = await runCli(ws, ["cards", "add", "reconnaissance"]);
+    expect(add.stdout).toContain("no meaning yet");
+
+    const define = await runCli(ws, ["cards", "define", "reconnaissance"]);
+    expect(define.code).toBe(0);
+    expect(define.stdout).toContain("1/1 card(s) defined");
+    expect(define.stdout).toContain("Test definition of reconnaissance");
+
+    const saved = JSON.parse(readFileSync(join(ws, ".secscribe", "vocabulary.json"), "utf8"));
+    const card = saved.cards[0];
+    expect(card.definition_en).toContain("reconnaissance");
+    expect(card.definition_vi).toContain("reconnaissance");
+    expect(card.phonetic).toBe("/test/");
+    // the dictionary example becomes an extra source
+    expect(card.sources.some((s: { file: string }) => s.file === "dictionary")).toBe(true);
   }, 30000);
 
   it("study: cloze → reveal → rate; SRS state persists (acceptance #4)", async () => {

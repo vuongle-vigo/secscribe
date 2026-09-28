@@ -21,6 +21,7 @@ export type PanelMessage =
   | { type: "practiceAddCard"; id: string }
   | { type: "vocabAddManual"; term: string }
   | { type: "vocabDelete"; term: string }
+  | { type: "vocabDefine"; term: string }
   | { type: "vocabConfirm"; key: string; accept: boolean }
   | { type: "studyStart" }
   | { type: "studyReveal" }

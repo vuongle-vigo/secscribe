@@ -70,6 +70,30 @@ function flipFirst(s: string): string {
   return (first === first.toUpperCase() ? first.toLowerCase() : first.toUpperCase()) + rest;
 }
 
+/** Canned bilingual definition for `Define the term: X` requests. */
+export function defineCompletion(term: string): string {
+  return completion(
+    JSON.stringify({
+      phonetic: "/test/",
+      definition_en: `Test definition of ${term}.`,
+      definition_vi: `Nghĩa kiểm thử của ${term}.`,
+      synonyms: ["syn"],
+      tags: ["test"],
+      example: `A test sentence using ${term}.`,
+    }),
+  );
+}
+
+/** Wrap a responder so definition requests get a canned entry, the rest pass through. */
+export function withDefine(respond: Responder): Responder {
+  return (req, i) => {
+    const user = [...req.body.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const m = /^Define the term:\s*(.+)$/m.exec(user);
+    if (m) return defineCompletion(m[1]!.trim());
+    return respond(req, i);
+  };
+}
+
 export interface FakeServer {
   url: string;
   server: Server;

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // Cross-package import of the core fake-server test helper; esbuild inlines
 // it at bundle time.
-import { startFakeServer, echoResponder } from "../../../core/test/helpers/fake-server";
+import { startFakeServer, echoResponder, withDefine } from "../../../core/test/helpers/fake-server";
 
 const PKG_ROOT = join(__dirname, "..", "..");
 
@@ -26,7 +26,7 @@ const FIXTURE_POST = [
 ].join("\n");
 
 async function main(): Promise<void> {
-  const server = await startFakeServer(echoResponder());
+  const server = await startFakeServer(withDefine(echoResponder()));
   let exitCode = 0;
   try {
     const ws = join(tmpdir(), `secscribe-vscode-test-${Date.now()}`);

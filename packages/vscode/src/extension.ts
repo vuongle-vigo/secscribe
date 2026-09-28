@@ -9,11 +9,20 @@
 import * as vscode from "vscode";
 import { writeFileSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
-import { appendHistory, applyEdits, ensureStateDir, gradeFix, toAnkiCsv, type WorkspacePaths } from "@secscribe/core";
+import {
+  LlmClient,
+  appendHistory,
+  applyEdits,
+  defineTerm,
+  ensureStateDir,
+  gradeFix,
+  toAnkiCsv,
+  type WorkspacePaths,
+} from "@secscribe/core";
 import { ConfigService } from "./config.js";
 import { DecorationManager } from "./decorations.js";
 import { SecScribePanel, type PanelMessage, type PanelState } from "./panel.js";
-import { reviewActiveEditor, type ReviewRun } from "./review.js";
+import { ensurePrivacyConfirmed, reviewActiveEditor, type ReviewRun } from "./review.js";
 import { toPanelPayload, type PanelPayload, type PanelSuggestion } from "./serialize.js";
 import { StudyController } from "./study.js";
 import { VocabularyService } from "./vocab.js";
@@ -136,6 +145,36 @@ function activateInner(context: vscode.ExtensionContext): void {
   const findSuggestion = (id: string): PanelSuggestion | null =>
     lastReviewPayload?.suggestions.find((s) => s.id === id) ?? null;
 
+  /**
+   * Backfill a card's bilingual meaning via the configured endpoint (SPEC §7
+   * backfill for manually added / practice-derived cards). Only the TERM is
+   * sent — never document content. Fills empty fields only.
+   */
+  async function defineAndMerge(term: string): Promise<boolean> {
+    const config = await configService.resolve({ promptForKey: false });
+    if (!config) return false;
+    if (!(await ensurePrivacyConfirmed(config.baseUrl ?? ""))) return false;
+    const llm = new LlmClient({
+      baseUrl: config.baseUrl ?? "",
+      apiKey: config.apiKey ?? "",
+      model: config.model ?? "",
+      temperature: config.temperature,
+      disableThinking: config.disableThinking,
+    });
+    const def = await defineTerm(llm, term);
+    if (!def) return false;
+    getVocab().addManual(term, def.example ? { file: "dictionary", quote: def.example } : undefined, {
+      phonetic: def.phonetic,
+      definition_en: def.definition_en,
+      definition_vi: def.definition_vi,
+      synonyms: def.synonyms,
+      tags: def.tags,
+    });
+    postVocabulary();
+    refreshStatusBar();
+    return true;
+  }
+
   type HistoryAction = "seen" | "copied" | "dismissed" | "applied" | "practiced-correct" | "practiced-partial" | "practiced-wrong";
 
   const record = (s: PanelSuggestion, action: HistoryAction): void => {
@@ -233,6 +272,16 @@ function activateInner(context: vscode.ExtensionContext): void {
         getVocab().addManual(term, { file, quote: term });
         postVocabulary();
         refreshStatusBar();
+        if (!getVocab().raw().find(term)?.definition_en) void defineAndMerge(term);
+        return;
+      }
+      case "vocabDefine": {
+        const ok = await defineAndMerge(msg.term);
+        panel.post({
+          type: "toast",
+          message: ok ? `meaning of “${msg.term}” added` : `could not define “${msg.term}” — check the endpoint`,
+          kind: ok ? "info" : "error",
+        });
         return;
       }
       case "vocabDelete": {
@@ -315,6 +364,13 @@ function activateInner(context: vscode.ExtensionContext): void {
     );
     postVocabulary();
     refreshStatusBar();
+    // Backfill the meaning in the background so manually added cards are
+    // never definition-less (only the term itself is sent).
+    if (!getVocab().raw().find(term)?.definition_en) {
+      void defineAndMerge(term).then((ok) => {
+        if (ok) void vscode.window.setStatusBarMessage(`SecScribe: meaning of “${term}” added`, 4000);
+      });
+    }
   });
 
   const studyNow = vscode.commands.registerCommand("secscribe.studyNow", () => {
@@ -374,6 +430,7 @@ function activateInner(context: vscode.ExtensionContext): void {
     appliedIds: [...applied],
     pendingVocabulary: vocabService?.pendingList() ?? [],
     vocabularyTerms: vocabService?.cards().map((c) => c.term) ?? [],
+    vocabularyCards: vocabService?.cards().map((c) => ({ term: c.term, hasDefinition: Boolean(c.definitionEn) })) ?? [],
     study: study.payload(),
     statusBarText: statusBar.text,
   }));

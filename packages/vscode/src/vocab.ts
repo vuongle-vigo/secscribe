@@ -68,8 +68,12 @@ export class VocabularyService {
     return true;
   }
 
-  addManual(term: string, source?: { file: string; quote: string }): { created: boolean; card: unknown } {
-    const { card, created } = this.store.add({ term, source });
+  addManual(
+    term: string,
+    source?: { file: string; quote: string },
+    extra?: { phonetic?: string; definition_en?: string; definition_vi?: string; synonyms?: string[]; tags?: string[] },
+  ): { created: boolean; card: unknown } {
+    const { card, created } = this.store.add({ term, source, ...extra });
     this.store.save();
     return { created, card };
   }

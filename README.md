@@ -79,8 +79,11 @@ The panel has three tabs:
   With `practiceMode` on, a **Practice** toggle hides the fix and grades
   your typed version (normalized comparison); wrong/partial fixes can
   become flashcards.
-- **Vocabulary** — searchable table (term, due state, tags), pending
-  extracts from the latest review (Add/Skip each), manual add/delete.
+- **Vocabulary** — searchable table (term, meaning, due state, tags),
+  pending extracts from the latest review (Add/Skip each), manual
+  add/delete. Manually added words get their bilingual meaning looked up
+  automatically (a 📖 Define button appears if that fails or you were
+  offline).
 - **Study** — cloze flashcards from your own sentences: Space = reveal,
   1–4 = Again/Hard/Good/Easy, progress bar, session summary.
 
