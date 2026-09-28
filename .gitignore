@@ -4,6 +4,9 @@ out/
 *.tsbuildinfo
 .secscribe/
 .env
+.env.*
 .vscode-test/
 packages/vscode/prompts/
 *.vsix
+.DS_Store
+deck.csv
