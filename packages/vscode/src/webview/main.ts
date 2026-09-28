@@ -149,10 +149,16 @@ function post(msg: unknown): void {
   vscode.postMessage(msg);
 }
 
+/** Render a cloze sentence with the blank run styled as a fill-in box. */
+function cloze(s: string): string {
+  return esc(s).replace(/_{4,}/g, '<span class="blank">&nbsp;</span>');
+}
+
 // ---- tabs shell ---------------------------------------------------------------
 
 function renderShell(content: string): void {
-  const tabs: Array<{ id: Tab; label: string; badge?: string }> = [
+  type TabSpec = { id: Tab; label: string; badge?: string; alert?: boolean };
+  const tabList: Array<TabSpec | null> = [
     surface === "panel"
       ? { id: "suggestions", label: "Suggestions", badge: review ? String(review.suggestions.length) : undefined }
       : null,
@@ -166,8 +172,10 @@ function renderShell(content: string): void {
           : studyP?.remainingDue
             ? `${studyP.remainingDue} due`
             : undefined,
+      alert: !(studyP && studyP.state !== "summary" && studyP.total > 0) && Boolean(studyP?.remainingDue),
     },
-  ].filter((t): t is { id: Tab; label: string; badge?: string } => t !== null);
+  ];
+  const tabs: TabSpec[] = tabList.filter((t): t is TabSpec => t !== null);
   const toastHtml = toast
     ? `<div class="toast ${toast.kind === "error" ? "toast-error" : ""}">${esc(toast.message)}</div>`
     : "";
@@ -176,7 +184,7 @@ function renderShell(content: string): void {
     .map(
       (t) =>
         `<button class="tab ${activeTab === t.id ? "active" : ""}" data-tab="${t.id}">${esc(t.label)}${
-          t.badge ? ` <span class="tab-badge">${esc(t.badge)}</span>` : ""
+          t.badge ? ` <span class="tab-badge${t.alert ? " alert" : ""}">${esc(t.badge)}</span>` : ""
         }</button>`,
     )
     .join("")}</nav>
@@ -319,7 +327,7 @@ function renderVocabulary(): string {
   const rows = cards
     .map((c) => {
       const defs = c.definitionEn
-        ? `<div class="def muted">${esc(c.definitionEn)}</div>${c.definitionVi ? `<div class="def muted def-vi">${esc(c.definitionVi)}</div>` : ""}`
+        ? `<div class="def muted" title="${esc(c.definitionEn)}">${esc(c.definitionEn)}</div>${c.definitionVi ? `<div class="def muted def-vi" title="${esc(c.definitionVi)}">${esc(c.definitionVi)}</div>` : ""}`
         : `<div class="def muted small-text">no meaning yet</div>`;
       const defineBtn = c.definitionEn
         ? ""
@@ -333,6 +341,36 @@ function renderVocabulary(): string {
     </tr>`;
     })
     .join("");
+  // Narrow surfaces (sidebar) render the same data as cards instead of the table;
+  // CSS picks which one is visible — no resize listener needed.
+  const cardItems = cards
+    .map(
+      (c) => `<div class="vocab-card">
+      <div class="term-row">
+        <span class="term">${esc(c.term)}</span>
+        ${c.phonetic ? `<span class="phonetic">${esc(c.phonetic)}</span>` : ""}
+        <span class="due-chip">${c.due ? `<span class="badge sev-minor">due</span>` : `<span class="muted small-text">${esc(c.dueDate)}</span>`}</span>
+        <span class="card-actions">
+          ${c.definitionEn ? "" : `<button class="btn ghost small" data-action="vocabDefine" data-term="${esc(c.term)}" title="Look up the bilingual meaning">📖</button>`}
+          <button class="btn ghost small" data-action="vocabDelete" data-term="${esc(c.term)}" title="Delete card">✕</button>
+        </span>
+      </div>
+      ${c.definitionEn ? `<div class="def muted">${esc(c.definitionEn)}</div>` : `<div class="def muted small-text">no meaning yet</div>`}
+      ${c.definitionVi ? `<div class="def muted def-vi">${esc(c.definitionVi)}</div>` : ""}
+      <div class="card-meta">
+        <span>${c.repetitions} rep · ${c.intervalDays}d</span>
+        ${c.tags.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}
+      </div>
+    </div>`,
+    )
+    .join("");
+  const listHtml = cards.length
+    ? `<table class="vocab-table">
+  <thead><tr><th>Term</th><th>Due</th><th>rep · interval</th><th>Tags</th><th></th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="vocab-cards">${cardItems}</div>`
+    : `<div class="empty">No cards yet — review a post or use “SecScribe: Add selection to vocabulary”.</div>`;
   return `
 <header class="head"><h1>Vocabulary</h1></header>
 ${pendingHtml}
@@ -340,10 +378,7 @@ ${pendingHtml}
   <input class="search" data-action="vocabSearch" placeholder="search term or tag…" value="${esc(vocabQuery)}">
   <span class="muted">${cards.length}/${v.cards.length} card(s)</span>
 </div>
-${cards.length ? `<table class="vocab-table">
-  <thead><tr><th>Term</th><th>Due</th><th>rep · interval</th><th>Tags</th><th></th></tr></thead>
-  <tbody>${rows}</tbody>
-</table>` : `<div class="empty">No cards yet — review a post or use “SecScribe: Add selection to vocabulary”.</div>`}`;
+${listHtml}`;
 }
 
 // ---- study tab ---------------------------------------------------------------------
@@ -375,7 +410,8 @@ function renderStudy(): string {
   const pct = Math.round((s.index / s.total) * 100);
   const back =
     s.state === "revealed"
-      ? `<div class="study-back">
+      ? `<div class="card-label">ANSWER</div>
+  <div class="study-back">
     <div class="term big">${esc(card.termLine)}</div>
     ${card.definitionEn ? `<div class="def">${esc(card.definitionEn)}</div>` : ""}
     ${card.definitionVi ? `<div class="def def-vi">${esc(card.definitionVi)}</div>` : ""}
@@ -394,10 +430,13 @@ function renderStudy(): string {
   </div>`
       : "";
   return `<header class="head"><h1>Study <span class="muted">[${s.index + 1}/${s.total}]</span></h1></header>
+<div class="study-wrap">
 <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
-<div class="study-card front">${esc(card.front)}</div>
+<div class="card-label">QUESTION — fill the blank</div>
+<div class="study-card front">${cloze(card.front)}</div>
 ${back}
-${rating}`;
+${rating}
+</div>`;
 }
 
 // ---- render dispatch ----------------------------------------------------------------
