@@ -19,7 +19,7 @@ interface State {
   pendingVocabulary: Array<{ key: string; term: string }>;
   vocabularyTerms: string[];
   vocabularyCards: Array<{ term: string; hasDefinition: boolean }>;
-  study: { state: string; index: number; total: number; counts: Record<string, number>; remainingDue: number; card: { term: string; front: string } | null };
+  study: { state: string; index: number; total: number; counts: Record<string, number>; remainingDue: number; card: { term: string; front: string } | null; answer: { text: string; correct: boolean } | null };
   statusBarText: string;
   sidebar: { visible: boolean; rendered: { tab: string; cards: number } | null } | null;
 }
@@ -189,6 +189,18 @@ suite("SecScribe M3 smoke", () => {
     const cardAfter = readVocab().cards.find((c) => c.term === firstTerm);
     assert.strictEqual(cardAfter!.srs.repetitions, 1, "SRS advanced and persisted");
     assert.ok(cardAfter!.srs.intervalDays >= 1);
+
+    // Typeable blank: a wrong answer reveals with a verdict…
+    await post({ type: "studyAnswer", text: "definitely wrong" });
+    let ansState = await waitFor((s) => s.study.state === "revealed" && s.study.answer !== null, "wrong answer revealed");
+    assert.strictEqual(ansState.study.answer!.correct, false);
+    await post({ type: "studyRate", rating: "easy" });
+    await waitFor((s) => s.study.state === "question", "next card after wrong answer");
+    // …and the correct term still matches under case/punctuation normalization.
+    const nextTerm = (await getState()).study.card!.term;
+    await post({ type: "studyAnswer", text: `  ${nextTerm.toUpperCase()}!!  ` });
+    ansState = await waitFor((s) => s.study.state === "revealed" && s.study.answer !== null, "typed answer revealed");
+    assert.strictEqual(ansState.study.answer!.correct, true, "normalized match counts as correct");
 
     // Finish the remaining cards (any rating).
     for (let guard = 0; guard < 50; guard++) {

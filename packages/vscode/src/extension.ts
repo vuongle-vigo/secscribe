@@ -320,6 +320,9 @@ function activateInner(context: vscode.ExtensionContext): void {
       case "studyReveal":
         pushStudy(study.reveal());
         return;
+      case "studyAnswer":
+        pushStudy(study.answer(msg.text));
+        return;
       case "studyRate":
         pushStudy(study.rate(msg.rating));
         refreshStatusBar();

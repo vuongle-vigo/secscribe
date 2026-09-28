@@ -197,6 +197,21 @@ body {
   border-bottom: 2px dashed var(--accent);
   background: rgba(0, 120, 212, 0.08); border-radius: 3px;
 }
+.blank.filled { border-bottom-style: solid; color: var(--ins); font-weight: 600; padding: 0 6px; }
+.blank.wrong {
+  border-bottom-style: solid; color: var(--del); text-decoration: line-through;
+  padding: 0 6px; min-width: 0;
+}
+.blank-input {
+  font: inherit; color: inherit;
+  border: none; border-bottom: 2px dashed var(--accent);
+  background: rgba(0, 120, 212, 0.08); border-radius: 3px;
+  padding: 0 6px; min-width: 120px; outline: none;
+}
+.blank-input:focus { border-bottom-style: solid; background: rgba(0, 120, 212, 0.16); }
+.answer-verdict { margin: 8px 0 0; font-weight: 600; }
+.answer-verdict.ok { color: var(--ins); }
+.answer-verdict.bad { color: var(--del); }
 .study-back { border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
 .study-back .term.big { font-size: 1.4em; margin: 2px 0 6px; }
 /* The answer block keeps secondary lines brighter than the muted default so

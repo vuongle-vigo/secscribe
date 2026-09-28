@@ -85,6 +85,7 @@ interface StudyPayload {
   card: StudyCard | null;
   counts: { again: number; hard: number; good: number; easy: number };
   remainingDue: number;
+  answer: { text: string; correct: boolean } | null;
 }
 
 interface PracticeResult {
@@ -126,6 +127,9 @@ let studyP: StudyPayload | null = null;
 let vocabQuery = "";
 /** Manual add box state — survives re-renders. */
 let manualTerm = "";
+/** Typed answer for the current study card — cleared when the card changes. */
+let studyInput = "";
+let studyCardKey = "";
 /** Practice state survives re-renders so typing is not lost. */
 let practice: { id: string; text: string; result?: PracticeResult } | null = null;
 let toast: { message: string; kind: "info" | "error" } | null = null;
@@ -154,6 +158,25 @@ function post(msg: unknown): void {
 /** Render a cloze sentence with the blank run styled as a fill-in box. */
 function cloze(s: string): string {
   return esc(s).replace(/_{4,}/g, '<span class="blank">&nbsp;</span>');
+}
+
+/** Question front: the blank becomes a TYPEABLE input (active recall). */
+function clozeInput(s: string): string {
+  return esc(s).replace(
+    /_{4,}/g,
+    '<input class="blank blank-input" data-action="blankInput" autocomplete="off" spellcheck="false" value="' +
+      esc(studyInput) +
+      '">',
+  );
+}
+
+/** Revealed front: the blank is filled with the term (green when the typed
+ *  answer matched, red strike-through of the typed text otherwise). */
+function clozeFilled(s: string, term: string, answer: { text: string; correct: boolean } | null): string {
+  const filled = answer && !answer.correct
+    ? `<span class="blank wrong">${esc(answer.text) || "…"}</span> <span class="blank filled">${esc(term)}</span>`
+    : `<span class="blank filled">${esc(term)}</span>`;
+  return esc(s).replace(/_{4,}/g, () => filled);
 }
 
 // ---- tabs shell ---------------------------------------------------------------
@@ -399,7 +422,7 @@ function renderStudy(): string {
 <div class="study-idle">
   <p class="muted">${s.remainingDue} card(s) due</p>
   <button class="btn primary big" data-action="studyStart" ${s.remainingDue === 0 ? "disabled" : ""}>Start session (${s.remainingDue} due)</button>
-  <p class="hint">Space = reveal · 1–4 = Again / Hard / Good / Easy</p>
+  <p class="hint">type the answer, Enter to check · Space = reveal · 1–4 = Again / Hard / Good / Easy</p>
 </div>`;
   }
   if (s.state === "summary") {
@@ -414,6 +437,22 @@ function renderStudy(): string {
   }
   const card = s.card!;
   const pct = Math.round((s.index / s.total) * 100);
+  // Reset the typed answer whenever a different card becomes current.
+  const cardKey = `${s.index}/${s.total}`;
+  if (cardKey !== studyCardKey) {
+    studyCardKey = cardKey;
+    studyInput = "";
+  }
+  const frontHtml =
+    s.state === "revealed"
+      ? clozeFilled(card.front, card.term, s.answer)
+      : clozeInput(card.front);
+  const verdict =
+    s.state === "revealed" && s.answer
+      ? `<div class="answer-verdict ${s.answer.correct ? "ok" : "bad"}">${
+          s.answer.correct ? "✓ correct" : `✗ you typed “${esc(s.answer.text)}” — the term was “${esc(card.term)}”`
+        }</div>`
+      : "";
   const back =
     s.state === "revealed"
       ? `<div class="card-label">ANSWER</div>
@@ -425,7 +464,10 @@ function renderStudy(): string {
     ${card.synonyms.length ? `<div class="muted">syn: ${card.synonyms.map((x) => esc(x)).join(", ")}</div>` : ""}
     ${card.source ? `<div class="muted small-text">source: ${esc(card.source)}</div>` : ""}
   </div>`
-      : `<div class="study-actions"><button class="btn primary big" data-action="studyReveal">Reveal (Space)</button></div>`;
+      : `<div class="study-actions">
+    <button class="btn primary big" data-action="studyAnswer">Check (Enter)</button>
+    <button class="btn big" data-action="studyReveal">Reveal (Space)</button>
+  </div>`;
   const rating =
     s.state === "revealed"
       ? `<div class="rate-row">
@@ -438,8 +480,9 @@ function renderStudy(): string {
   return `<header class="head"><h1>Study <span class="muted">[${s.index + 1}/${s.total}]</span></h1></header>
 <div class="study-wrap">
 <div class="progress"><div class="progress-fill" style="width:${pct}%"></div></div>
-<div class="card-label">QUESTION — fill the blank</div>
-<div class="study-card front">${cloze(card.front)}</div>
+<div class="card-label">QUESTION — type the missing word, then Check</div>
+<div class="study-card front">${frontHtml}</div>
+${verdict}
 ${back}
 ${rating}
 </div>`;
@@ -461,6 +504,11 @@ function render(): void {
   }
   const input = app.querySelector<HTMLInputElement>(".practice-input");
   if (input) input.focus();
+  const blank = app.querySelector<HTMLInputElement>(".blank-input");
+  if (blank) {
+    blank.focus();
+    blank.setSelectionRange(blank.value.length, blank.value.length);
+  }
   const search = app.querySelector<HTMLInputElement>(".search");
   if (search) {
     search.focus();
@@ -527,6 +575,13 @@ function wireEvents(): void {
         case "studyStart":
           post({ type: "studyStart" });
           return;
+        case "studyAnswer": {
+          const text = studyInput.trim();
+          studyInput = "";
+          if (text) post({ type: "studyAnswer", text });
+          else post({ type: "studyReveal" });
+          return;
+        }
         case "studyReveal":
           post({ type: "studyReveal" });
           return;
@@ -564,6 +619,21 @@ function wireEvents(): void {
           post({ type: "vocabAddManual", term });
           render();
         }
+      }
+    });
+  });
+
+  app.querySelectorAll<HTMLInputElement>(".blank-input").forEach((input) => {
+    input.addEventListener("input", () => {
+      studyInput = input.value;
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const text = studyInput.trim();
+        studyInput = "";
+        if (text) post({ type: "studyAnswer", text });
+        else post({ type: "studyReveal" });
       }
     });
   });

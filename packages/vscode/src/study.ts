@@ -1,5 +1,5 @@
 /** Study session controller: cloze flashcards via the core store (SPEC §9). */
-import { makeCloze, type Rating, type Card } from "@secscribe/core";
+import { makeCloze, normalizeForComparison, type Rating, type Card } from "@secscribe/core";
 
 export interface PanelStudyCard {
   term: string;
@@ -21,6 +21,9 @@ export interface PanelStudy {
   card: PanelStudyCard | null;
   counts: { again: number; hard: number; good: number; easy: number };
   remainingDue: number;
+  /** Present when the card was revealed by typing an answer into the blank:
+   *  the typed text and whether it matches the term (normalized compare). */
+  answer: { text: string; correct: boolean } | null;
 }
 
 interface Session {
@@ -28,6 +31,7 @@ interface Session {
   index: number;
   revealed: boolean;
   counts: PanelStudy["counts"];
+  answer: { text: string; correct: boolean } | null;
 }
 
 export class StudyController {
@@ -44,13 +48,24 @@ export class StudyController {
     const queue = this.vocab.raw().studyQueue(new Date(), this.limits());
     this.lastSummary = null;
     this.session = queue.length
-      ? { queue, index: 0, revealed: false, counts: { again: 0, hard: 0, good: 0, easy: 0 } }
+      ? { queue, index: 0, revealed: false, counts: { again: 0, hard: 0, good: 0, easy: 0 }, answer: null }
       : null;
     return this.payload();
   }
 
   reveal(): PanelStudy {
     if (this.session && !this.session.revealed) this.session.revealed = true;
+    return this.payload();
+  }
+
+  /** Typed answer: normalize (case/punctuation/whitespace), reveal with a verdict. */
+  answer(text: string): PanelStudy {
+    if (!this.session || this.session.revealed) return this.payload();
+    const card = this.session.queue[this.session.index];
+    if (!card) return this.payload();
+    const correct = normalizeForComparison(text) === normalizeForComparison(card.term);
+    this.session.answer = { text: text.trim(), correct };
+    this.session.revealed = true;
     return this.payload();
   }
 
@@ -63,6 +78,7 @@ export class StudyController {
       this.session.counts[rating] += 1;
     }
     this.session.revealed = false;
+    this.session.answer = null;
     this.session.index += 1;
     if (this.session.index >= this.session.queue.length) {
       this.lastSummary = this.session.counts;
@@ -86,6 +102,7 @@ export class StudyController {
           card: null,
           counts: this.lastSummary,
           remainingDue: this.vocab.dueCount(),
+          answer: null,
         };
       }
       return {
@@ -96,6 +113,7 @@ export class StudyController {
         card: null,
         counts: { again: 0, hard: 0, good: 0, easy: 0 },
         remainingDue: this.vocab.dueCount(),
+        answer: null,
       };
     }
     const card = this.session.queue[this.session.index]!;
@@ -107,6 +125,8 @@ export class StudyController {
       card: toPanelCard(card),
       counts: this.session.counts,
       remainingDue: this.vocab.dueCount(),
+      // Only a typed answer carries a verdict; plain reveals have none.
+      answer: this.session.revealed ? this.session.answer : null,
     };
   }
 }

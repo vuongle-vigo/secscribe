@@ -27,6 +27,7 @@ export type PanelMessage =
   | { type: "vocabConfirm"; key: string; accept: boolean }
   | { type: "studyStart" }
   | { type: "studyReveal" }
+  | { type: "studyAnswer"; text: string }
   | { type: "studyRate"; rating: "again" | "hard" | "good" | "easy" };
 
 /** extension → webview payloads (besides PanelPayload). */

@@ -310,6 +310,18 @@ Surfaces mapped to their natural lifetime:
   scoped `resourceLangId == markdown`. Chosen over Cmd+Shift+E, which would
   shadow the default "Show Explorer" chord; users can rebind.
 
+## Study: typeable blank (post-M3 addition)
+
+The cloze blank in Study is an actual input, not decoration: type the
+missing term, press Enter/Check → the card reveals with a verdict
+(normalized comparison via core `normalizeForComparison`, same rule as
+practice mode), then self-rate 1–4. Space/"Reveal" remains the give-up
+path (no verdict). A wrong answer renders the typed text struck-through
+next to the filled term. Typed input survives re-renders (e.g. a
+background auto-define pushing a vocabulary payload mid-question) and is
+cleared when the card changes. Verdicts are ephemeral (not history
+records — §10 has no study-answer action).
+
 ## Testing
 
 - **Property test** uses an adversarial in-process LLM (seeded PRNG) that
