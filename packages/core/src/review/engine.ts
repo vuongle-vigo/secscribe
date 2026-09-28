@@ -4,7 +4,7 @@
  * (one repair-retry, then drop), and enforces the markdown-safety rules.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import type { ResolvedConfig } from "../config.js";
@@ -16,7 +16,37 @@ import { parseReviewResponse } from "./schema.js";
 import { cacheKey, ReviewCache, type CacheEntry } from "./cache.js";
 import type { RawSuggestion, RawVocabulary } from "./schema.js";
 
-const PROMPT_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "prompts", "review-system.md");
+const PROMPT_PATH = resolvePromptPath();
+
+// __dirname is a module-scoped CJS binding (not a global), so reference it
+// directly behind a local declaration; typeof keeps it safe in ESM.
+declare const __dirname: string | undefined;
+
+/**
+ * Locate prompts/review-system.md relative to this module — works in core's
+ * own ESM dist (dist/review/../prompts), in vitest (src/review/../prompts),
+ * and inside CJS bundles (e.g. the VS Code extension), where import.meta.url
+ * is undefined and __dirname points at the bundle's directory instead.
+ */
+function resolvePromptPath(): string {
+  const bases: string[] = [];
+  try {
+    const url = import.meta?.url;
+    if (typeof url === "string") bases.push(dirname(fileURLToPath(url)));
+  } catch {
+    // import.meta unavailable in this module format
+  }
+  try {
+    if (typeof __dirname === "string" && __dirname) bases.push(__dirname);
+  } catch {
+    // ESM: __dirname not defined
+  }
+  for (const base of bases) {
+    const candidate = join(base, "..", "prompts", "review-system.md");
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error("SecScribe: prompts/review-system.md not found next to the engine module");
+}
 
 /**
  * The response schema from spec §6.4, embedded in every user prompt — the

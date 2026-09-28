@@ -15,7 +15,7 @@ network peer is the OpenAI-compatible endpoint you configure.
 | --- | --- |
 | `packages/core` | All logic: markdown-safe segmentation, LLM review pipeline, vocabulary, SM-2 SRS, storage |
 | `packages/cli` | `secscribe` command-line interface |
-| `packages/vscode` | VS Code extension (M2/M3 — not built yet) |
+| `packages/vscode` | VS Code extension: read-only Suggestions panel + gutter dots (M2) |
 
 ## Setup
 
@@ -54,6 +54,25 @@ secscribe export anki --out deck.csv
 
 secscribe status   # due counts, cards, ~tokens last 7 days
 ```
+
+## VS Code extension (M2)
+
+```bash
+pnpm --filter @secscribe/vscode build   # bundle to dist/extension.js
+```
+
+Run/debug it: open `packages/vscode` in VS Code and press F5 (or "Extensions:
+Install from VSIX" after packaging). Then:
+
+- **SecScribe: Review current file** — reviews the active Markdown post and
+  opens the SecScribe panel.
+- The panel is **read-only**: every item shows line number, severity,
+  category, a word-level diff, and EN + VI explanations. Actions: *Copy
+  corrected text*, *Go to line* (moves the cursor, never edits), *Dismiss*.
+- A subtle gutter dot marks lines with pending suggestions
+  (`secScribe.highlightInEditor`).
+- Settings: everything from the spec under the `secScribe.*` prefix; the API
+  key is stored in VS Code SecretStorage (prompted on first review).
 
 ## How code stays safe
 

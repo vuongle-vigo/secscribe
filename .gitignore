@@ -1,5 +1,8 @@
 node_modules/
 dist/
+out/
 *.tsbuildinfo
 .secscribe/
 .env
+.vscode-test/
+packages/vscode/prompts/

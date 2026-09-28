@@ -10,8 +10,9 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm build && vitest run",
-    "typecheck": "tsc -b --force"
+    "test": "pnpm build && vitest run && pnpm --filter @secscribe/vscode test",
+    "test:fast": "vitest run",
+    "typecheck": "tsc -b --force && pnpm --filter @secscribe/vscode typecheck"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

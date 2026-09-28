@@ -151,6 +151,60 @@ pick the simpler option and record it here).
   available, else ceil(chars/4) + 64 completion tokens per cached sentence,
   over the last 7 days.
 
+## VS Code extension (M2)
+
+- **Panel**: single Suggestions tab for M2 (the Vocabulary and Study tabs are
+  M3 per §13). Read-only: actions are Copy corrected text / Go to line /
+  Dismiss. There is no write path in M2 at all — `applyMode` is accepted in
+  settings (and shown in the panel header) but "assist" behaves exactly like
+  "self" until M3.
+- **Config resolution in the extension**: VS Code settings act as the
+  highest layer (the UI equivalent of CLI flags): VS Code settings > env
+  (`SECSRIBE_API_KEY`/`SECSRIBE_BASE_URL`/`SECSRIBE_MODEL`) > workspace
+  `.secscribe/settings.json` > `~/.secscribe/settings.json`. The API key
+  resolution is SecretStorage > env > home file; workspace settings never
+  supply a key (stripped on read). The key is collected via a password
+  InputBox on first review and stored only in SecretStorage.
+- **Workspace root** in the extension is `workspaceFolders[0]` (never a
+  `process.cwd()` walk-up, which inside the extension host is not the
+  user's project).
+- **§11 privacy confirmation**: modal `showInformationMessage` once per
+  endpoint, persisted via `confirmedEndpoints` in the workspace settings;
+  `SECSRIBE_YES=1` skips it (same env contract as the CLI).
+- **History mapping (§10)**: rendering a review records `seen` for every
+  suggestion; Copy records `copied`; Dismiss records `dismissed`; Go to line
+  records `seen` (no dedicated action exists in the §10 set).
+- **Dismissed suggestions** are in-memory per review run + `dismissed`
+  history records; they are not persisted across runs.
+- **Gutter dot**: a single `gutterIconPath` decoration type (media/dot.svg)
+  on the lines of non-dismissed, non-stale suggestions; refreshed after
+  dismiss. `highlightInEditor: false` clears it.
+- **Command scope for M2**: only `SecScribe: Review current file` (Add
+  selection to vocabulary / Study now / Export Anki CSV are M3; §13 puts
+  vocabulary, study, and export there). Two test-only commands
+  (`secscribe.test.getState`, `secscribe.test.postMessage`) are contributed
+  for the smoke test — they expose the same panel state and message contract
+  the webview uses, nothing more.
+- **Webview testing strategy**: the smoke test asserts the panel via the
+  serialized payload + a `rendered` ack the webview posts after drawing
+  (item count, first line), and drives clicks by posting the exact webview
+  messages through the same handler. No DOM automation inside the webview —
+  the message contract is the tested surface (recorded here per the spec's
+  testing instructions).
+- **Bundling**: esbuild — extension as CJS (VS Code loads a single file;
+  `@secscribe/core` incl. zod is bundled), webview as an IIFE + CSS with a
+  nonce CSP. `mocha` stays external in both test bundles so the runner and
+  suites share one instance.
+- **Prompt resolution in bundles**: core's engine now locates
+  `prompts/review-system.md` via `import.meta.url` with a `__dirname`
+  fallback (esbuild CJS bundles replace `import.meta.url` with `undefined`,
+  and `__dirname` is a module-scoped CJS binding, not a global). The vscode
+  build copies the prompt to `packages/vscode/prompts/` next to the bundle.
+- **autoReviewOnSave** is contributed as a setting but not wired (M3, with
+  the panel polish); the status bar item is M3 per §13.
+- Root vitest excludes `packages/vscode/**` (its tests import the ambient
+  `vscode` module and run under @vscode/test-electron instead).
+
 ## Testing
 
 - **Property test** uses an adversarial in-process LLM (seeded PRNG) that

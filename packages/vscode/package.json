@@ -1,0 +1,139 @@
+{
+  "name": "@secscribe/vscode",
+  "displayName": "SecScribe",
+  "description": "English review and vocabulary coach for security blog posts (read-only suggestions panel)",
+  "version": "0.1.0",
+  "license": "MIT",
+  "publisher": "secscribe",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:secscribe.reviewFile",
+    "workspaceContains:**/.secscribe/**"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "secscribe.reviewFile",
+        "title": "SecScribe: Review current file"
+      },
+      {
+        "command": "secscribe.test.getState",
+        "title": "SecScribe (test): get panel state"
+      },
+      {
+        "command": "secscribe.test.postMessage",
+        "title": "SecScribe (test): post a panel message"
+      }
+    ],
+    "configuration": {
+      "title": "SecScribe",
+      "properties": {
+        "secScribe.baseUrl": {
+          "type": "string",
+          "markdownDescription": "OpenAI-compatible endpoint, e.g. `https://api.z.ai/api/coding/paas/v4`. Resolution: VS Code settings > env (`SECSRIBE_BASE_URL`) > `.secscribe/settings.json` > `~/.secscribe/settings.json`.",
+          "order": 1
+        },
+        "secScribe.model": {
+          "type": "string",
+          "markdownDescription": "Chat model name, e.g. `glm-4.6`.",
+          "order": 2
+        },
+        "secScribe.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sampling temperature for review requests.",
+          "order": 3
+        },
+        "secScribe.explanationLanguage": {
+          "type": "string",
+          "default": "vi",
+          "description": "Second explanation language (v1 prompt is bilingual English + Vietnamese).",
+          "order": 4
+        },
+        "secScribe.newCardsPerDay": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "description": "Max new vocabulary cards introduced per day (M3 study features).",
+          "order": 5
+        },
+        "secScribe.reviewsPerDay": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "description": "Max card reviews per day (M3 study features).",
+          "order": 6
+        },
+        "secScribe.redactCodeInPrompt": {
+          "type": "boolean",
+          "default": true,
+          "description": "Replace code/URLs with opaque placeholders before sending text to the endpoint (always safety-checked).",
+          "order": 7
+        },
+        "secScribe.autoReviewOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run a review automatically after saving a Markdown file (not wired in M2).",
+          "order": 8
+        },
+        "secScribe.applyMode": {
+          "type": "string",
+          "default": "self",
+          "enum": [
+            "self",
+            "assist"
+          ],
+          "enumDescriptions": [
+            "Read-only panel: copy, go to line, dismiss (default; no write path)",
+            "Additionally show an 'Apply fix' button per suggestion (M3)"
+          ],
+          "description": "How fixes reach the document. M2 ships no write path: the extension never edits the document on its own.",
+          "order": 9
+        },
+        "secScribe.practiceMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Per-suggestion active-recall practice (M3).",
+          "order": 10
+        },
+        "secScribe.highlightInEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a subtle gutter dot on lines that have pending suggestions.",
+          "order": 11
+        },
+        "secScribe.vocabAutoAdd": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-add LLM-extracted vocabulary without confirmation (M3 vocabulary tab).",
+          "order": 12
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs && tsc -p tsconfig.json",
+    "test": "node scripts/build.mjs --tests && node out/test/runTest.js",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@secscribe/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.23.0",
+    "mocha": "^10.6.0",
+    "typescript": "^5.5.4"
+  }
+}

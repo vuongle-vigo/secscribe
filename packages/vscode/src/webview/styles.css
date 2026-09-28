@@ -1,0 +1,90 @@
+:root {
+  --fg: var(--vscode-foreground, #ccc);
+  --muted: var(--vscode-descriptionForeground, #999);
+  --bg: var(--vscode-editor-background, #1e1e1e);
+  --accent: var(--vscode-focusBorder, #0078d4);
+  --error: #f14c4c;
+  --minor: #cca700;
+  --ins: #4ec94e;
+  --del: #f14c4c;
+  --border: var(--vscode-panel-border, #333);
+  --btn: var(--vscode-button-background, #0078d4);
+  --btn-hover: var(--vscode-button-hoverBackground, #026ec1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+.loading { color: var(--muted); }
+
+.head h1 { font-size: 1.1em; margin: 0 0 4px; }
+.head .file { color: var(--muted); font-weight: normal; }
+.head .meta { margin: 0 0 12px; color: var(--muted); }
+.readonly { color: var(--minor); }
+
+.item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.item:hover, .item:focus { border-color: var(--accent); outline: none; }
+
+.item-head { margin-bottom: 6px; }
+
+.badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 6px;
+  font-size: 0.85em;
+}
+.sev-error { background: var(--error); color: #fff; }
+.sev-minor { background: var(--minor); color: #000; }
+.cat { border: 1px solid var(--border); color: var(--muted); }
+.line { color: var(--muted); }
+.warn { background: var(--minor); color: #000; }
+
+.sentence { margin: 6px 0; line-height: 1.5; }
+.sentence del { color: var(--del); text-decoration: line-through; background: rgba(241, 76, 76, 0.12); border-radius: 2px; }
+.sentence ins { color: var(--ins); text-decoration: none; background: rgba(78, 201, 78, 0.12); border-radius: 2px; }
+.sentence .same { }
+
+.reason { color: var(--fg); margin: 2px 0; }
+.reason .lang {
+  display: inline-block;
+  min-width: 22px;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.alt { color: var(--muted); font-size: 0.9em; margin-top: 4px; }
+
+.actions { margin-top: 8px; display: flex; gap: 6px; }
+
+.btn {
+  background: var(--btn);
+  color: var(--vscode-button-foreground, #fff);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+}
+.btn:hover { background: var(--btn-hover); }
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
