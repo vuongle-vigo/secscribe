@@ -26,6 +26,8 @@ export interface LlmClientConfig {
   model: string;
   temperature?: number;
   timeoutMs?: number;
+  /** GLM reasoning switch: "auto" enables it only for Z.ai/bigmodel hosts. */
+  disableThinking?: "auto" | "on" | "off";
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
 }
@@ -68,6 +70,11 @@ export class LlmClient {
       stream: false,
     };
     if (opts.maxTokens) body["max_tokens"] = opts.maxTokens;
+    // GLM coding endpoints serve a reasoning model by default; a review batch
+    // then reasons for minutes and the connection gets reset. Disable thinking
+    // unless the user opted out — but only for GLM hosts, since other
+    // OpenAI-compatible servers reject unknown parameters.
+    if (this.shouldDisableThinking()) body["thinking"] = { type: "disabled" };
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -114,6 +121,18 @@ export class LlmClient {
             }
           : null,
     };
+  }
+
+  private shouldDisableThinking(): boolean {
+    const mode = this.cfg.disableThinking ?? "auto";
+    if (mode === "off") return false;
+    if (mode === "on") return true;
+    try {
+      const host = new URL(completionsUrl(this.cfg.baseUrl)).hostname;
+      return host === "api.z.ai" || host.endsWith(".z.ai") || host.endsWith("bigmodel.cn") || host.endsWith(".bigmodel.cn");
+    } catch {
+      return false;
+    }
   }
 
   /** Small connectivity/model check used by `secscribe init`. */

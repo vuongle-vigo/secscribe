@@ -1,16 +1,23 @@
 /**
- * SecScribe extension entry point (M2, SPEC §9/§13).
+ * SecScribe extension entry point (M3, SPEC §9/§13).
  *
  * Core UX rule: the extension NEVER modifies the user's document on its own.
- * M2 ships no write path at all — actions are copy / go-to-line / dismiss.
+ * With applyMode "self" (default) there is no write path; with "assist" the
+ * only writes are single-click, per-suggestion WorkspaceEdits — never bulk,
+ * never automatic, never on save.
  */
 import * as vscode from "vscode";
-import { appendHistory } from "@secscribe/core";
+import { writeFileSync } from "node:fs";
+import { basename, dirname, relative } from "node:path";
+import { appendHistory, applyEdits, ensureStateDir, gradeFix, toAnkiCsv, type WorkspacePaths } from "@secscribe/core";
 import { ConfigService } from "./config.js";
 import { DecorationManager } from "./decorations.js";
 import { SecScribePanel, type PanelMessage, type PanelState } from "./panel.js";
-import { reviewActiveEditor } from "./review.js";
-import { toPanelPayload, type PanelSuggestion } from "./serialize.js";
+import { reviewActiveEditor, type ReviewRun } from "./review.js";
+import { toPanelPayload, type PanelPayload, type PanelSuggestion } from "./serialize.js";
+import { StudyController } from "./study.js";
+import { VocabularyService } from "./vocab.js";
+import { applySuggestion } from "./apply.js";
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log("[secscribe] activating extension");
@@ -25,54 +32,86 @@ export function activate(context: vscode.ExtensionContext): void {
 
 function activateInner(context: vscode.ExtensionContext): void {
   const configService = new ConfigService(context.secrets);
+  // Diagnostic: resolve once at activation so config problems show in the
+  // extension host log without waiting for a command run.
+  void configService.resolve({ promptForKey: false }).catch((err) =>
+    console.error("[secscribe] activation-time resolve failed:", err),
+  );
   const decorations = new DecorationManager(context);
   const dismissed = new Set<string>();
-  let lastRun: Awaited<ReturnType<typeof reviewActiveEditor>> = null;
+  const applied = new Set<string>();
+  let lastRun: ReviewRun | null = null;
+  let vocabService: VocabularyService | null = null;
+  let lastReviewPayload: PanelPayload | null = null;
 
   const settings = () => vscode.workspace.getConfiguration("secScribe");
 
-  const panel = new SecScribePanel(context, {
-    async onCopy(s: PanelSuggestion) {
-      await vscode.env.clipboard.writeText(s.replacement);
-      if (lastRun) {
-        appendHistory(lastRun.paths.history, [
-          { ts: new Date().toISOString(), file: lastRun.displayFile, sentenceHash: s.sentenceHash, suggestionId: s.id, action: "copied" },
-        ]);
-      }
-      void vscode.window.setStatusBarMessage("SecScribe: corrected text copied", 3000);
-    },
+  function workspaceRoot(): string {
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (folder) return folder;
+    const editor = vscode.window.activeTextEditor;
+    return editor ? dirname(editor.document.fileName) : process.cwd();
+  }
 
-    async onGoto(s: PanelSuggestion) {
-      // Reveal the line and move the cursor — never change a character.
-      const editor = lastRun?.editor ?? vscode.window.activeTextEditor;
-      if (!editor) return;
-      const pos = new vscode.Position(s.line - 1, 0);
-      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
-      editor.selection = new vscode.Selection(pos, pos);
-      if (lastRun) {
-        appendHistory(lastRun.paths.history, [
-          { ts: new Date().toISOString(), file: lastRun.displayFile, sentenceHash: s.sentenceHash, suggestionId: s.id, action: "seen" },
-        ]);
-      }
-    },
+  function getVocab(): VocabularyService {
+    if (!vocabService) vocabService = new VocabularyService(ensureStateDir(workspaceRoot()) as WorkspacePaths);
+    return vocabService;
+  }
 
-    async onDismiss(s: PanelSuggestion) {
-      dismissed.add(s.id);
-      if (lastRun) {
-        appendHistory(lastRun.paths.history, [
-          { ts: new Date().toISOString(), file: lastRun.displayFile, sentenceHash: s.sentenceHash, suggestionId: s.id, action: "dismissed" },
-        ]);
-      }
-      rerender();
+  const study = new StudyController(
+    {
+      raw: () => getVocab().raw(),
+      dueCount: () => getVocab().dueCount(),
     },
-  });
+    () => ({
+      newPerDay: settings().get<number>("newCardsPerDay", 10),
+      reviewsPerDay: settings().get<number>("reviewsPerDay", 50),
+    }),
+  );
 
-  function rerender(): void {
+  // ---- status bar: "$(book) SecScribe: N due" — click opens Study (§9) ----
+
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBar.command = "secscribe.studyNow";
+  statusBar.tooltip = "SecScribe — click to study due cards";
+  context.subscriptions.push(statusBar);
+
+  function refreshStatusBar(): void {
+    if (!settings().get<boolean>("showStatusBar", true)) {
+      statusBar.hide();
+      return;
+    }
+    statusBar.text = `$(book) SecScribe: ${getVocab().dueCount()} due`;
+    statusBar.show();
+  }
+
+  // ---- panel ----------------------------------------------------------------
+
+  const panel = new SecScribePanel(context, { onMessage: handlePanelMessage });
+
+  function currentPayload(): PanelPayload {
+    const run = lastRun!;
+    return toPanelPayload(
+      run.result,
+      dismissed,
+      applied,
+      settings().get<"self" | "assist">("applyMode", "self"),
+      settings().get<boolean>("practiceMode", false),
+    );
+  }
+
+  function postVocabulary(): void {
+    panel.post({ type: "vocabulary", cards: getVocab().cards(), pending: getVocab().pendingList() });
+  }
+
+  function rerender(tab?: "suggestions" | "vocabulary" | "study"): void {
     if (!lastRun) return;
-    const payload = toPanelPayload(lastRun.result, dismissed, settings().get<"self" | "assist">("applyMode", "self"));
-    panel.show(payload);
+    lastReviewPayload = currentPayload();
+    panel.show(lastReviewPayload, tab);
     panel.setDismissed([...dismissed]);
     refreshDecorations();
+    postVocabulary();
+    refreshStatusBar();
   }
 
   function refreshDecorations(): void {
@@ -86,7 +125,7 @@ function activateInner(context: vscode.ExtensionContext): void {
     const lines = [
       ...new Set(
         lastRun.result.suggestions
-          .filter((s) => !dismissed.has(s.id) && s.match.status !== "stale")
+          .filter((s) => !dismissed.has(s.id) && !applied.has(s.id) && s.match.status !== "stale")
           .map((s) => s.line),
       ),
     ].sort((a, b) => a - b);
@@ -94,24 +133,278 @@ function activateInner(context: vscode.ExtensionContext): void {
     panel.setDecoratedLines(lines);
   }
 
+  const findSuggestion = (id: string): PanelSuggestion | null =>
+    lastReviewPayload?.suggestions.find((s) => s.id === id) ?? null;
+
+  type HistoryAction = "seen" | "copied" | "dismissed" | "applied" | "practiced-correct" | "practiced-partial" | "practiced-wrong";
+
+  const record = (s: PanelSuggestion, action: HistoryAction): void => {
+    if (!lastRun) return;
+    appendHistory(lastRun.paths.history, [
+      { ts: new Date().toISOString(), file: lastRun.displayFile, sentenceHash: s.sentenceHash, suggestionId: s.id, action },
+    ]);
+  };
+
+  // ---- panel message handling --------------------------------------------------
+
+  async function handlePanelMessage(msg: PanelMessage): Promise<void> {
+    switch (msg.type) {
+      case "ready":
+        panel.markReady();
+        return;
+      case "rendered":
+        panel.markRendered(msg.items, msg.firstLine);
+        return;
+      case "tab":
+        if (msg.tab === "study") panel.post(study.payload());
+        if (msg.tab === "vocabulary") postVocabulary();
+        return;
+      case "copy": {
+        const s = findSuggestion(msg.id);
+        if (s) {
+          await vscode.env.clipboard.writeText(s.replacement);
+          record(s, "copied");
+          void vscode.window.setStatusBarMessage("SecScribe: corrected text copied", 3000);
+        }
+        return;
+      }
+      case "goto": {
+        // Reveal the line and move the cursor — never change a character.
+        const s = findSuggestion(msg.id);
+        const editor = lastRun?.editor ?? vscode.window.activeTextEditor;
+        if (!s || !editor) return;
+        const pos = new vscode.Position(s.line - 1, 0);
+        editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+        editor.selection = new vscode.Selection(pos, pos);
+        record(s, "seen");
+        return;
+      }
+      case "dismiss": {
+        const s = findSuggestion(msg.id);
+        if (s) {
+          dismissed.add(s.id);
+          record(s, "dismissed");
+          rerender();
+        }
+        return;
+      }
+      case "apply": {
+        // applyMode "assist" only: one explicit click, one exact-match edit.
+        if (settings().get<"self" | "assist">("applyMode", "self") !== "assist") {
+          panel.post({ type: "applyResult", id: msg.id, ok: false, message: "applyMode is 'self' — no write path" });
+          return;
+        }
+        const s = findSuggestion(msg.id);
+        const editor = lastRun?.editor;
+        if (!s || !editor) return;
+        const outcome = await applySuggestion(editor, s.original, s.replacement, msg.occurrence);
+        if (outcome.ok) {
+          applied.add(s.id);
+          record(s, "applied");
+          rerender();
+        }
+        panel.post({ type: "applyResult", id: msg.id, ok: outcome.ok, message: outcome.message });
+        return;
+      }
+      case "practice": {
+        const s = findSuggestion(msg.id);
+        if (!s) return;
+        const { verdict, similarity } = gradeFix(msg.text, s.replacement);
+        record(s, verdict === "correct" ? "practiced-correct" : verdict === "partial" ? "practiced-partial" : "practiced-wrong");
+        panel.post({ type: "practiceResult", id: msg.id, verdict, similarity });
+        return;
+      }
+      case "practiceAddCard": {
+        // Learn the corrected phrase (SPEC §7c): term = replacement, source
+        // quote = the corrected sentence.
+        const s = findSuggestion(msg.id);
+        if (!s || !lastRun) return;
+        const corrected = applyEdits(s.sentence, [{ quote: s.original, replacement: s.replacement }]);
+        getVocab().addManual(s.replacement, { file: lastRun.displayFile, quote: corrected.text });
+        postVocabulary();
+        refreshStatusBar();
+        panel.post({ type: "toast", message: `“${s.replacement.slice(0, 40)}${s.replacement.length > 40 ? "…" : ""}” added to vocabulary`, kind: "info" });
+        return;
+      }
+      case "vocabAddManual": {
+        const term = msg.term.trim();
+        if (!term) return;
+        const file = lastRun?.displayFile ?? "manual";
+        getVocab().addManual(term, { file, quote: term });
+        postVocabulary();
+        refreshStatusBar();
+        return;
+      }
+      case "vocabDelete": {
+        if (getVocab().delete(msg.term)) {
+          postVocabulary();
+          refreshStatusBar();
+        }
+        return;
+      }
+      case "vocabConfirm": {
+        if (lastRun) {
+          getVocab().confirm(msg.key, msg.accept, lastRun.displayFile);
+          postVocabulary();
+          refreshStatusBar();
+        }
+        return;
+      }
+      case "studyStart":
+        panel.post(study.start());
+        refreshStatusBar();
+        return;
+      case "studyReveal":
+        panel.post(study.reveal());
+        return;
+      case "studyRate":
+        panel.post(study.rate(msg.rating));
+        refreshStatusBar();
+        return;
+    }
+  }
+
+  // ---- commands -----------------------------------------------------------------
+
   const reviewFile = vscode.commands.registerCommand("secscribe.reviewFile", async () => {
     const config = await configService.resolve({ promptForKey: true });
     if (!config) return;
     const run = await reviewActiveEditor(config);
     if (!run) return;
     lastRun = run;
+    vocabService = new VocabularyService(run.paths);
     dismissed.clear();
+    applied.clear();
+
+    // Vocabulary extraction (SPEC §7a): confirm each card, or auto-add.
+    // No tab hijack — pending items surface on the Vocabulary tab badge.
+    const ingest = vocabService.ingest(run.result.vocabulary, run.displayFile, config.vocabAutoAdd);
+    if (ingest.added > 0) {
+      void vscode.window.setStatusBarMessage(`SecScribe: ${ingest.added} card(s) added`, 4000);
+    } else if (run.result.vocabulary.length > 0) {
+      void vscode.window.setStatusBarMessage(
+        `SecScribe: ${run.result.vocabulary.length} word(s) to review — see the Vocabulary tab`,
+        5000,
+      );
+    }
+
     rerender();
   });
 
-  // Test hooks (used by the @vscode/test-electron smoke test; harmless dev
-  // commands — the panel message contract is the same one the webview uses).
-  const testGetState = vscode.commands.registerCommand("secscribe.test.getState", (): PanelState => panel.state);
+  const addSelection = vscode.commands.registerCommand("secscribe.addSelectionToVocabulary", () => {
+    const editor = vscode.window.activeTextEditor;
+    const selection = editor?.selection;
+    const term = selection && editor ? editor.document.getText(selection).trim() : "";
+    if (!editor || !selection || !term) {
+      void vscode.window.showWarningMessage("SecScribe: select a word or short phrase first.");
+      return;
+    }
+    if (term.length > 120 || term.includes("\n")) {
+      void vscode.window.showWarningMessage("SecScribe: selection is too long for a vocabulary term.");
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const file = folder
+      ? relative(folder, editor.document.fileName) || basename(editor.document.fileName)
+      : basename(editor.document.fileName);
+    const quote = editor.document.lineAt(selection.start.line).text.trim();
+    const { created } = getVocab().addManual(term, { file, quote });
+    void vscode.window.setStatusBarMessage(
+      created ? `SecScribe: “${term}” added` : `SecScribe: “${term}” already known — sources merged`,
+      4000,
+    );
+    postVocabulary();
+    refreshStatusBar();
+  });
+
+  const studyNow = vscode.commands.registerCommand("secscribe.studyNow", () => {
+    if (!lastRun) {
+      // No review yet: synthesize an empty run so Study/Vocabulary still work.
+      const folder = workspaceRoot();
+      const editor = vscode.window.activeTextEditor;
+      const displayFile = editor
+        ? folder
+          ? relative(folder, editor.document.fileName) || basename(editor.document.fileName)
+          : basename(editor.document.fileName)
+        : "(none)";
+      lastRun = {
+        result: {
+          file: displayFile,
+          title: null,
+          suggestions: [],
+          vocabulary: [],
+          sentences: [],
+          stats: { sentences: 0, batchesSent: 0, cacheHits: 0, llmFailures: [], rejectedSuggestions: 0 },
+          usage: { promptTokens: 0, completionTokens: 0, requests: 0 },
+        },
+        paths: ensureStateDir(folder),
+        displayFile,
+        editor: (editor ?? vscode.window.activeTextEditor) as vscode.TextEditor,
+      };
+      lastReviewPayload = currentPayload();
+    }
+    rerender("study");
+    panel.post(study.start());
+  });
+
+  const exportAnki = vscode.commands.registerCommand("secscribe.exportAnki", async (uri?: vscode.Uri) => {
+    const cards = getVocab().raw().all();
+    if (cards.length === 0) {
+      void vscode.window.showWarningMessage("SecScribe: no cards to export yet.");
+      return;
+    }
+    const target =
+      uri ??
+      (await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file("deck.csv"),
+        filters: { "Anki CSV": ["csv"] },
+      }));
+    if (!target) return;
+    writeFileSync(target.fsPath, toAnkiCsv(cards), "utf8");
+    void vscode.window.showInformationMessage(`SecScribe: wrote ${target.fsPath} — ${cards.length} card(s)`);
+  });
+
+  const openSettings = vscode.commands.registerCommand("secscribe.openSettings", () => {
+    void vscode.commands.executeCommand("workbench.action.openSettings", "@ext:secscribe.secscribe");
+  });
+
+  // Test hooks (same message contract the webview uses).
+  const testGetState = vscode.commands.registerCommand("secscribe.test.getState", (): PanelState & Record<string, unknown> => ({
+    ...panel.state,
+    appliedIds: [...applied],
+    pendingVocabulary: vocabService?.pendingList() ?? [],
+    vocabularyTerms: vocabService?.cards().map((c) => c.term) ?? [],
+    study: study.payload(),
+    statusBarText: statusBar.text,
+  }));
   const testPostMessage = vscode.commands.registerCommand("secscribe.test.postMessage", (msg: PanelMessage) =>
     panel.handleMessage(msg),
   );
 
-  context.subscriptions.push(decorations, reviewFile, testGetState, testPostMessage);
+  // autoReviewOnSave (SPEC §4): review after saving a markdown file.
+  // Reviews only — nothing is ever applied automatically.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
+    if (!settings().get<boolean>("autoReviewOnSave", false)) return;
+    if (doc.languageId !== "markdown" && !doc.fileName.toLowerCase().endsWith(".md")) return;
+    if (vscode.window.activeTextEditor?.document !== doc) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void vscode.commands.executeCommand("secscribe.reviewFile"), 800);
+  });
+
+  context.subscriptions.push(
+    decorations,
+    statusBar,
+    onSave,
+    reviewFile,
+    addSelection,
+    studyNow,
+    exportAnki,
+    openSettings,
+    testGetState,
+    testPostMessage,
+  );
+  refreshStatusBar();
 }
 
 export function deactivate(): void {

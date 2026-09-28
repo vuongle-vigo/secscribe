@@ -1,18 +1,86 @@
 /**
- * SecScribe panel (webview) — the dedicated, READ-ONLY review surface
- * (SPEC §9). M2 has no write path at all: per-suggestion actions are
- * Copy corrected text / Go to line / Dismiss. The panel never edits the
- * document.
+ * SecScribe panel (webview) — the dedicated review surface (SPEC §9).
+ * Three tabs: Suggestions (read-only by default), Vocabulary, Study.
+ * The panel itself never edits the document; assisted apply happens through
+ * the extension's apply handler, one explicit click at a time.
  */
 import * as vscode from "vscode";
-import type { PanelPayload, PanelSuggestion } from "./serialize.js";
+import type { PanelPayload } from "./serialize.js";
+import type { PanelStudy } from "./study.js";
 
+/** webview → extension messages. */
 export type PanelMessage =
   | { type: "ready" }
   | { type: "rendered"; items: number; firstLine?: number }
+  | { type: "tab"; tab: "suggestions" | "vocabulary" | "study" }
   | { type: "copy"; id: string }
   | { type: "goto"; id: string; line: number }
-  | { type: "dismiss"; id: string };
+  | { type: "dismiss"; id: string }
+  | { type: "apply"; id: string; occurrence?: number }
+  | { type: "practice"; id: string; text: string }
+  | { type: "practiceAddCard"; id: string }
+  | { type: "vocabAddManual"; term: string }
+  | { type: "vocabDelete"; term: string }
+  | { type: "vocabConfirm"; key: string; accept: boolean }
+  | { type: "studyStart" }
+  | { type: "studyReveal" }
+  | { type: "studyRate"; rating: "again" | "hard" | "good" | "easy" };
+
+/** extension → webview payloads (besides PanelPayload). */
+export interface PanelVocabularyPayload {
+  type: "vocabulary";
+  cards: Array<{
+    term: string;
+    due: boolean;
+    dueDate: string;
+    intervalDays: number;
+    repetitions: number;
+    phonetic: string;
+    definitionEn: string;
+    definitionVi: string;
+    synonyms: string[];
+    tags: string[];
+    sources: Array<{ file: string; quote: string }>;
+  }>;
+  pending: Array<{
+    key: string;
+    term: string;
+    phonetic: string;
+    definitionEn: string;
+    definitionVi: string;
+    example: string;
+    synonyms: string[];
+    tags: string[];
+  }>;
+}
+
+export interface PanelPracticeResult {
+  type: "practiceResult";
+  id: string;
+  verdict: "correct" | "partial" | "incorrect";
+  similarity: number;
+}
+
+export interface PanelApplyResult {
+  type: "applyResult";
+  id: string;
+  ok: boolean;
+  message: string;
+}
+
+export interface PanelToast {
+  type: "toast";
+  message: string;
+  kind: "info" | "error";
+}
+
+export type PanelOutbound =
+  | PanelPayload
+  | PanelVocabularyPayload
+  | PanelPracticeResult
+  | PanelApplyResult
+  | PanelToast
+  | PanelStudy;
 
 export interface PanelState {
   visible: boolean;
@@ -29,23 +97,24 @@ export class SecScribePanel {
   private dismissedIds: string[] = [];
   private decoratedLines: number[] = [];
   private webviewReady = false;
+  private revealTab: "suggestions" | "vocabulary" | "study" = "suggestions";
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly handlers: {
-      onCopy(s: PanelSuggestion): Promise<void> | void;
-      onGoto(s: PanelSuggestion): Promise<void> | void;
-      onDismiss(s: PanelSuggestion): Promise<void> | void;
+      onMessage(msg: PanelMessage): Promise<void> | void;
     },
   ) {}
 
-  /** Show (or reuse) the panel with a fresh payload. */
-  show(payload: PanelPayload): void {
+  /** Show (or reuse) the panel, optionally focusing a tab. */
+  show(payload: PanelPayload, tab?: "suggestions" | "vocabulary" | "study"): void {
     this.payload = payload;
     this.rendered = null;
+    if (tab) this.revealTab = tab;
     if (this.panel) {
       this.panel.reveal();
-      this.post();
+      this.post(payload);
+      this.post({ type: "setTab", tab: this.revealTab });
       return;
     }
     this.panel = vscode.window.createWebviewPanel(
@@ -59,7 +128,7 @@ export class SecScribePanel {
       },
     );
     this.panel.webview.html = this.html(this.panel.webview);
-    this.panel.webview.onDidReceiveMessage((msg: PanelMessage) => this.handleMessage(msg), undefined, this.context.subscriptions);
+    this.panel.webview.onDidReceiveMessage((msg: PanelMessage) => this.handlers.onMessage(msg), undefined, this.context.subscriptions);
     this.panel.onDidDispose(() => {
       this.panel = undefined;
       this.webviewReady = false;
@@ -69,39 +138,18 @@ export class SecScribePanel {
 
   /** Entry point for webview messages and the test hook alike. */
   async handleMessage(msg: PanelMessage): Promise<void> {
-    const find = (id: string) => this.payload?.suggestions.find((s) => s.id === id) ?? null;
-    switch (msg.type) {
-      case "ready":
-        this.webviewReady = true;
-        this.post();
-        return;
-      case "rendered":
-        this.rendered = { items: msg.items, firstLine: msg.firstLine };
-        return;
-      case "copy": {
-        const s = find(msg.id);
-        if (s) await this.handlers.onCopy(s);
-        return;
-      }
-      case "goto": {
-        const s = find(msg.id);
-        if (s) await this.handlers.onGoto(s);
-        return;
-      }
-      case "dismiss": {
-        const s = find(msg.id);
-        if (s) await this.handlers.onDismiss(s);
-        return;
-      }
-    }
+    await this.handlers.onMessage(msg);
   }
 
-  setDecoratedLines(lines: number[]): void {
-    this.decoratedLines = lines;
+  /** Push any payload to the webview (no-op before it is ready). */
+  post(payload: unknown): void {
+    if (this.webviewReady) void this.panel?.webview.postMessage(payload);
   }
 
-  setDismissed(ids: string[]): void {
-    this.dismissedIds = ids;
+  /** Ask the webview to switch tabs (also queues for after readiness). */
+  switchTab(tab: "suggestions" | "vocabulary" | "study"): void {
+    this.revealTab = tab;
+    this.post({ type: "setTab", tab });
   }
 
   get state(): PanelState {
@@ -114,21 +162,30 @@ export class SecScribePanel {
     };
   }
 
-  private post(): void {
-    if (this.payload && this.webviewReady) {
-      void this.panel?.webview.postMessage(this.payload);
-    }
+  /** Webview signalled readiness: re-push the current payloads. */
+  markReady(): void {
+    this.webviewReady = true;
+    if (this.payload) this.post(this.payload);
+    this.post({ type: "setTab", tab: this.revealTab });
+  }
+
+  markRendered(items: number, firstLine?: number): void {
+    this.rendered = { items, firstLine };
+  }
+
+  setDismissed(ids: string[]): void {
+    this.dismissedIds = ids;
+  }
+
+  setDecoratedLines(lines: number[]): void {
+    this.decoratedLines = lines;
   }
 
   private html(webview: vscode.Webview): string {
     const nonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     const script = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "main.js"));
     const style = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "styles.css"));
-    const csp = [
-      "default-src 'none'",
-      `style-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`,
-    ].join("; ");
+    const csp = ["default-src 'none'", `style-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join("; ");
     return `<!DOCTYPE html>
 <html lang="en">
 <head>

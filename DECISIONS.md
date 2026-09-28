@@ -31,6 +31,23 @@ pick the simpler option and record it here).
   `confirmedEndpoints` inside the workspace settings file; `--yes` or
   `SECSRIBE_YES=1` skips the prompt for CI.
 
+- **`disableThinking` (extra setting)**: coding-plan endpoints serve a GLM
+  reasoning model by default; a non-streaming review batch then reasons for
+  minutes until the connection is reset (~10 min, connection reset by peer —
+  reproduced with curl, 2026-09-28). The client sends
+  `thinking: {type: "disabled"}` (GLM parameter) when the setting is `"on"`,
+  or `"auto"` (default) and the endpoint host is `z.ai`/`bigmodel.cn`; other
+  OpenAI-compatible servers never see the parameter. Measured: 585s reset →
+  26.6s with thinking disabled.
+
+- **Empty-string VS Code settings are unset**: a cleared field in the Settings
+  UI yields `""`, which shadowed valid values from `~/.secscribe/settings.json`
+  and failed zod validation instantly (`invalid_url` / `min(1)` — surfaced as
+  the review command dying before any request, 2026-09-28). `resolve()` now
+  skips empty strings from the VS Code layer and shows a friendly message if
+  the merged settings still fail validation. It also logs the config layers to
+  the extension host log and resolves once at activation for diagnostics.
+
 ## Markdown safety
 
 - **Placeholder format**: `⟦<Letter><Number>⟧` with per-kind counters —
@@ -200,10 +217,57 @@ pick the simpler option and record it here).
   fallback (esbuild CJS bundles replace `import.meta.url` with `undefined`,
   and `__dirname` is a module-scoped CJS binding, not a global). The vscode
   build copies the prompt to `packages/vscode/prompts/` next to the bundle.
-- **autoReviewOnSave** is contributed as a setting but not wired (M3, with
-  the panel polish); the status bar item is M3 per §13.
+- **autoReviewOnSave** is wired in M3 (see below).
 - Root vitest excludes `packages/vscode/**` (its tests import the ambient
   `vscode` module and run under @vscode/test-electron instead).
+
+## VS Code extension (M3)
+
+- **Assisted apply (`applyMode: "assist"`)**: one "Apply fix" click per
+  suggestion → the extension re-runs the exact-match search against the live
+  document, re-verifies the quoted span, and applies a single `WorkspaceEdit`
+  replace. Ambiguous quotes render per-occurrence buttons ("line N"); stale
+  quotes refuse with a message. Never bulk, never automatic, never on save;
+  in `"self"` mode the handler rejects with "no write path".
+- **Applied suggestions** behave like dismissed ones: removed from the panel
+  and gutter, recorded as `applied` history.
+- **Practice mode**: per-suggestion "Practice this fix" hides the corrected
+  sentence, takes the user's typed fix, and grades with core `gradeFix`
+  (normalized whitespace/punctuation/case). Wrong/partial fixes get an
+  "Add to flashcards" button that stores the corrected phrase as the term
+  with the corrected sentence as the source quote (§7c). Practice input
+  state survives panel re-renders.
+- **Vocabulary tab**: searchable/filterable table (client-side filtering over
+  the full card list — fine at v1 card volumes), manual add, delete, and the
+  pending-extract confirmations from the latest review. Reviews do NOT
+  auto-switch tabs: pending items surface via the tab badge and a status
+  message (auto-switching hijacked the Suggestions flow and also broke the
+  render-ack contract the tests rely on).
+- **Study tab**: session state lives in the extension (StudyController over
+  the core store); the webview renders. Space = reveal, 1–4 = rate (keyboard
+  handled only while the Study tab is focused and no input is). The summary
+  (counts + remaining due) persists until the next session starts — a
+  session that self-nulls on completion used to zero its counts before the
+  summary could render.
+- **Study before any review**: `secscribe.studyNow` synthesizes an empty run
+  so Study/Vocabulary work on a fresh window.
+- **Status bar**: `$(book) SecScribe: N due`, click = Study now. `secScribe.showStatusBar`
+  (default true) hides it — the spec says "can be disabled" without naming a
+  key. Refreshed on activation, reviews, vocabulary changes, and study
+  ratings.
+- **Commands**: `Add selection to vocabulary` (selection trimmed, ≤120 chars,
+  single line; source quote = the containing line), `Study now`, `Export
+  Anki CSV` (Save dialog, or a direct Uri when invoked programmatically —
+  how the smoke test drives it headless), `Open settings`
+  (`@ext:secscribe.secscribe`).
+- **autoReviewOnSave** is wired: saving an active Markdown file triggers a
+  (debounced 800 ms) review — reviews only, nothing is ever applied.
+- **Rendered ack**: the webview posts `rendered` (suggestion count) after
+  EVERY render regardless of the visible tab, so the extension/tests can
+  always observe the current suggestions state.
+- **Config diagnostics**: the activation-time layer log redacts the API key
+  (`"***set***"`) — it briefly printed the real home key to the extension
+  host log, violating acceptance #6.
 
 ## Testing
 

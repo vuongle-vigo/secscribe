@@ -88,3 +88,85 @@ body {
 }
 
 .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+
+/* ---- tabs ---- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.tab {
+  background: transparent; border: none; color: var(--muted);
+  padding: 6px 10px; cursor: pointer; font-size: 1em; border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--fg); border-bottom-color: var(--accent); }
+.tab-badge {
+  display: inline-block; min-width: 18px; text-align: center;
+  background: var(--border); border-radius: 8px; padding: 0 5px; font-size: 0.8em;
+}
+
+/* ---- suggestions extras ---- */
+.btn.primary { background: var(--accent); }
+.btn.small { padding: 2px 7px; font-size: 0.85em; }
+.occ-label { color: var(--muted); font-size: 0.9em; }
+.hidden-sentence { color: var(--muted); font-style: italic; }
+.sev-ok { background: var(--ins); color: #000; }
+.practice { margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.practice-input {
+  flex: 1; min-width: 200px;
+  background: var(--vscode-input-background, #222);
+  color: var(--vscode-input-foreground, var(--fg));
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px;
+  font-family: inherit; font-size: 0.95em;
+}
+
+/* ---- vocabulary ---- */
+.pending { border: 1px dashed var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+.pending h2 { font-size: 1em; margin: 0 0 8px; }
+.pending-card { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.pending-card:last-child { border-bottom: none; }
+.term { font-weight: 600; }
+.term.big { font-size: 1.15em; margin: 4px 0; }
+.phonetic { color: var(--muted); font-weight: normal; font-size: 0.9em; }
+.def { margin: 2px 0; }
+.def-vi { color: var(--muted); }
+.quote { color: var(--muted); font-style: italic; margin: 4px 0; }
+.vocab-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.search {
+  flex: 1;
+  background: var(--vscode-input-background, #222);
+  color: var(--vscode-input-foreground, var(--fg));
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px;
+  font-family: inherit; font-size: 0.95em;
+}
+.vocab-table { width: 100%; border-collapse: collapse; }
+.vocab-table th {
+  text-align: left; color: var(--muted); font-weight: normal; font-size: 0.85em;
+  border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0;
+}
+.vocab-table td { border-bottom: 1px solid var(--border); padding: 5px 8px 5px 0; vertical-align: top; }
+.term-cell { font-weight: 600; }
+.muted { color: var(--muted); }
+.small-text { font-size: 0.85em; }
+
+/* ---- study ---- */
+.study-idle, .study-summary { text-align: center; padding: 20px 0; }
+.btn.big { font-size: 1.1em; padding: 8px 16px; }
+.hint { color: var(--muted); font-size: 0.9em; margin-top: 12px; }
+.progress { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 14px; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s; }
+.study-card { padding: 8px 0; }
+.study-card.front { font-size: 1.2em; line-height: 1.6; min-height: 64px; }
+.study-back { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+.study-actions { margin-top: 12px; }
+.rate-row { display: flex; gap: 6px; margin-top: 14px; }
+.rate { flex: 1; }
+.rate-again { background: var(--error); }
+.rate-hard { background: var(--minor); color: #000; }
+.rate-good { background: var(--btn); }
+.rate-easy { background: var(--ins); color: #000; }
+
+/* ---- toast ---- */
+.toast {
+  position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+  background: var(--btn); color: var(--vscode-button-foreground, #fff);
+  border-radius: 4px; padding: 6px 14px; font-size: 0.9em;
+}
+.toast-error { background: var(--error); }

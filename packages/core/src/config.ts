@@ -22,6 +22,14 @@ export const SettingsSchema = z.object({
   highlightInEditor: z.boolean().default(true),
   /** Extra setting (not in §4): auto-add LLM-extracted vocabulary without confirmation. */
   vocabAutoAdd: z.boolean().default(false),
+  /**
+   * Send `thinking: {type: "disabled"}` (GLM reasoning switch). Coding-plan
+   * endpoints serve a reasoning model by default; without this a review batch
+   * reasons for minutes and the connection is reset. "auto" applies it only
+   * for Z.ai/bigmodel hosts so other OpenAI-compatible endpoints never see an
+   * unknown parameter.
+   */
+  disableThinking: z.enum(["auto", "on", "off"]).default("auto"),
   /** Endpoints the user has confirmed for the §11 privacy prompt. */
   confirmedEndpoints: z.array(z.string()).default([]),
 });

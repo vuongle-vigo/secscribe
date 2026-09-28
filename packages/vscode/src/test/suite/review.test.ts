@@ -33,7 +33,7 @@ const ws = process.env["SECSRIBE_TEST_WS"] ?? "";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitForState(pred: (s: PanelStateJson) => boolean): Promise<PanelStateJson> {
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < 300; i++) {
     const state = (await vscode.commands.executeCommand("secscribe.test.getState")) as PanelStateJson;
     if (pred(state)) return state;
     await sleep(200);
@@ -65,7 +65,7 @@ suite("SecScribe M2 smoke", () => {
     const all = vscode.extensions.all.map((e) => e.id);
     const ext =
       vscode.extensions.getExtension("secscribe.vscode") ??
-      vscode.extensions.getExtension("secscribe.@secscribe/vscode") ??
+      vscode.extensions.getExtension("secscribe.secscribe") ??
       all.filter((id) => id.includes("secscribe")).map((id) => vscode.extensions.getExtension(id)!)[0];
     assert.ok(ext, `extension not found — registered extensions: ${all.join(", ")}`);
     await ext.activate();

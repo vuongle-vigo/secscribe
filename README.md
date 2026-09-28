@@ -55,24 +55,40 @@ secscribe export anki --out deck.csv
 secscribe status   # due counts, cards, ~tokens last 7 days
 ```
 
-## VS Code extension (M2)
+## VS Code extension
 
 ```bash
-pnpm --filter @secscribe/vscode build   # bundle to dist/extension.js
+pnpm --filter secscribe build   # bundle to dist/extension.js
 ```
 
 Run/debug it: open `packages/vscode` in VS Code and press F5 (or "Extensions:
-Install from VSIX" after packaging). Then:
+Install from VSIX" after packaging). Commands:
 
 - **SecScribe: Review current file** — reviews the active Markdown post and
   opens the SecScribe panel.
-- The panel is **read-only**: every item shows line number, severity,
-  category, a word-level diff, and EN + VI explanations. Actions: *Copy
-  corrected text*, *Go to line* (moves the cursor, never edits), *Dismiss*.
-- A subtle gutter dot marks lines with pending suggestions
-  (`secScribe.highlightInEditor`).
-- Settings: everything from the spec under the `secScribe.*` prefix; the API
-  key is stored in VS Code SecretStorage (prompted on first review).
+- **SecScribe: Add selection to vocabulary** — select a word/phrase → card.
+- **SecScribe: Study now** / **Export Anki CSV** / **Open settings**.
+
+The panel has three tabs:
+
+- **Suggestions** — line number, severity, category, word-level diff, EN+VI
+  explanations. Default (`applyMode: "self"`) is read-only: *Copy corrected
+  text*, *Go to line* (moves the cursor, never edits), *Dismiss*. With
+  `applyMode: "assist"` each item also gets an **Apply fix** button (one
+  explicit click, one exact-match edit — never bulk/automatic/on-save).
+  With `practiceMode` on, a **Practice** toggle hides the fix and grades
+  your typed version (normalized comparison); wrong/partial fixes can
+  become flashcards.
+- **Vocabulary** — searchable table (term, due state, tags), pending
+  extracts from the latest review (Add/Skip each), manual add/delete.
+- **Study** — cloze flashcards from your own sentences: Space = reveal,
+  1–4 = Again/Hard/Good/Easy, progress bar, session summary.
+
+Plus a gutter dot on lines with pending suggestions
+(`secScribe.highlightInEditor`) and a `SecScribe: N due` status bar item
+(`secScribe.showStatusBar`). Settings: everything from the spec under the
+`secScribe.*` prefix; the API key lives in VS Code SecretStorage (prompted
+on first review).
 
 ## How code stays safe
 

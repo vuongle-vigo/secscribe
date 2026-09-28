@@ -77,4 +77,14 @@ if (withTests) {
     external: ["vscode", "mocha"],
     logLevel: "info",
   });
+  await build({
+    entryPoints: [join(root, "src", "test", "suite", "m3.test.ts")],
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    target: "node18",
+    outfile: join(root, "out", "test", "suite", "m3.test.js"),
+    external: ["vscode", "mocha"],
+    logLevel: "info",
+  });
 }

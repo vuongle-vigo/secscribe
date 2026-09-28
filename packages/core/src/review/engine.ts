@@ -138,6 +138,8 @@ export interface ReviewResult {
   title: string | null;
   suggestions: Suggestion[];
   vocabulary: VocabularyExtract[];
+  /** The split sentences (text + hash + line) the review covered. */
+  sentences: Array<{ text: string; hash: string; line: number }>;
   stats: ReviewStats;
   usage: ReviewUsage;
 }
@@ -210,6 +212,7 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
             apiKey: config.apiKey ?? "",
             model: config.model ?? "",
             temperature: config.temperature,
+            disableThinking: config.disableThinking,
           });
     }
     return llm;
@@ -316,7 +319,15 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
 
   cache.save();
   suggestions.sort((a, b) => a.line - b.line || a.originalQuote.localeCompare(b.originalQuote));
-  return { file, title: masked.title, suggestions, vocabulary, stats, usage };
+  return {
+    file,
+    title: masked.title,
+    suggestions,
+    vocabulary,
+    sentences: sentences.map((s) => ({ text: s.text, hash: s.hash, line: s.line })),
+    stats,
+    usage,
+  };
 }
 
 interface BatchReply {

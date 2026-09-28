@@ -47,6 +47,9 @@ function pickVsCodeSettings(): Partial<Settings> {
   for (const key of Object.keys(shape)) {
     if (key === "apiKey" || key === "confirmedEndpoints") continue;
     const value = cfg.get(key);
+    // An empty string (cleared field in the Settings UI) must not shadow a
+    // valid value from the settings files — treat it as unset.
+    if (typeof value === "string" && value.trim() === "") continue;
     if (value !== undefined && value !== null) out[key] = value;
   }
   return out as Partial<Settings>;
@@ -66,13 +69,34 @@ export class ConfigService {
     const home = readSettingsFile(homeSettingsPath());
     const homeWithSecrets = readSettingsFile(homeSettingsPath());
     const env = pickEnv();
+    const vsCode = pickVsCodeSettings();
 
-    const merged = SettingsSchema.parse({
-      ...home,
-      ...wsFile,
-      ...env,
-      ...pickVsCodeSettings(),
-    });
+    // Diagnostics only — the API key is NEVER printed (acceptance #6).
+    console.log(
+      "[secscribe] config layers:",
+      JSON.stringify({
+        home: home ? { ...home, apiKey: home.apiKey ? "***set***" : undefined } : null,
+        wsFile,
+        env: Object.keys(env),
+        vsCode,
+      }),
+    );
+
+    let merged: Settings;
+    try {
+      merged = SettingsSchema.parse({
+        ...home,
+        ...wsFile,
+        ...env,
+        ...vsCode,
+      });
+    } catch (err) {
+      console.error("[secscribe] settings merge failed:", err);
+      void vscode.window.showErrorMessage(
+        "SecScribe: invalid configuration — check secScribe.* settings and ~/.secscribe/settings.json (see logs).",
+      );
+      return null;
+    }
 
     // API key: SecretStorage > env > home file; workspace files never supply it.
     const stored = await this.secrets.get(SECRET_API_KEY);

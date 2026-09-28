@@ -76,6 +76,7 @@ export async function reviewActiveEditor(
             apiKey: config.apiKey ?? "",
             model: config.model ?? "",
             temperature: config.temperature,
+            disableThinking: config.disableThinking,
           }),
       }),
   );

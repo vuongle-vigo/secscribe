@@ -1,8 +1,8 @@
 {
-  "name": "@secscribe/vscode",
+  "name": "secscribe",
   "displayName": "SecScribe",
   "description": "English review and vocabulary coach for security blog posts (read-only suggestions panel)",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "license": "MIT",
   "publisher": "secscribe",
   "engines": {
@@ -14,6 +14,9 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onCommand:secscribe.reviewFile",
+    "onCommand:secscribe.addSelectionToVocabulary",
+    "onCommand:secscribe.studyNow",
+    "onCommand:secscribe.exportAnki",
     "workspaceContains:**/.secscribe/**"
   ],
   "contributes": {
@@ -21,6 +24,22 @@
       {
         "command": "secscribe.reviewFile",
         "title": "SecScribe: Review current file"
+      },
+      {
+        "command": "secscribe.addSelectionToVocabulary",
+        "title": "SecScribe: Add selection to vocabulary"
+      },
+      {
+        "command": "secscribe.studyNow",
+        "title": "SecScribe: Study now"
+      },
+      {
+        "command": "secscribe.exportAnki",
+        "title": "SecScribe: Export Anki CSV"
+      },
+      {
+        "command": "secscribe.openSettings",
+        "title": "SecScribe: Open settings"
       },
       {
         "command": "secscribe.test.getState",
@@ -113,8 +132,14 @@
         "secScribe.vocabAutoAdd": {
           "type": "boolean",
           "default": false,
-          "description": "Auto-add LLM-extracted vocabulary without confirmation (M3 vocabulary tab).",
+          "description": "Auto-add LLM-extracted vocabulary without confirmation.",
           "order": 12
+        },
+        "secScribe.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the 'SecScribe: N due' status bar item (click to study).",
+          "order": 13
         }
       }
     }

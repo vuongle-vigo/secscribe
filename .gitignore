@@ -6,3 +6,4 @@ out/
 .env
 .vscode-test/
 packages/vscode/prompts/
+*.vsix
