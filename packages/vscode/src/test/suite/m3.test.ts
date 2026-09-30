@@ -66,14 +66,15 @@ suite("SecScribe M3 smoke", () => {
   const post = (msg: unknown) => vscode.commands.executeCommand("secscribe.test.postMessage", msg);
 
   test("assisted apply: one click, exact replacement, history records applied", async () => {
-    const cfg = vscode.workspace.getConfiguration("secScribe");
-    await cfg.update("applyMode", "assist", vscode.ConfigurationTarget.Workspace);
-
     const editor = await showPost();
     await vscode.commands.executeCommand("secscribe.reviewFile");
 
-    const state = await waitFor((s) => s.rendered !== null && s.rendered.items > 0, "review under assist");
-    assert.strictEqual(state.payload!.applyMode, "assist");
+    // Flip to assist via the panel-header toggle (the real user path).
+    await post({ type: "toggleApplyMode" });
+    const state = await waitFor(
+      (s) => s.rendered !== null && s.rendered.items > 0 && s.payload!.applyMode === "assist",
+      "review under assist after the header toggle",
+    );
     // everything from the M2 suite is still pending except the dismissed item
     assert.ok(state.payload!.suggestions.length >= 2);
 

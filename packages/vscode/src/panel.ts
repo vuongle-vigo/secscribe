@@ -19,6 +19,8 @@ export type PanelMessage =
   | { type: "goto"; id: string; line: number }
   | { type: "dismiss"; id: string }
   | { type: "apply"; id: string; occurrence?: number }
+  /** Flip secScribe.applyMode between "self" (read-only) and "assist". */
+  | { type: "toggleApplyMode" }
   | { type: "practice"; id: string; text: string }
   | { type: "practiceAddCard"; id: string }
   | { type: "vocabAddManual"; term: string }

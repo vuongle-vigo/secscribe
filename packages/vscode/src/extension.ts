@@ -243,6 +243,14 @@ function activateInner(context: vscode.ExtensionContext): void {
         }
         return;
       }
+      case "toggleApplyMode": {
+        // Panel-header shortcut for secScribe.applyMode (workspace scope).
+        const current = settings().get<"self" | "assist">("applyMode", "self");
+        const next = current === "self" ? "assist" : "self";
+        await settings().update("applyMode", next, vscode.ConfigurationTarget.Workspace);
+        rerender();
+        return;
+      }
       case "apply": {
         // applyMode "assist" only: one explicit click, one exact-match edit.
         if (settings().get<"self" | "assist">("applyMode", "self") !== "assist") {

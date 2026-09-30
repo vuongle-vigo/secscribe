@@ -301,13 +301,18 @@ function renderSuggestion(s: PanelSuggestion): string {
 function renderSuggestions(): string {
   if (!review) return `<div class="empty">Run “SecScribe: Review current file” to see suggestions.</div>`;
   const parts: string[] = [];
+  const applyToggle =
+    review.applyMode === "self"
+      ? `<button class="btn ghost small" data-action="toggleApplyMode" title="Show an 'Apply fix' button on every suggestion (secScribe.applyMode = assist)">✏️ Show Fix buttons</button>`
+      : `<button class="btn ghost small" data-action="toggleApplyMode" title="Hide apply buttons — back to read-only (secScribe.applyMode = self)">🔒 Turn off Fix buttons</button>`;
   parts.push(`<header class="head">
   <h1>SecScribe <span class="file">${esc(review.file)}</span></h1>
   <p class="meta">${review.suggestions.length} suggestion(s) · ${review.stats.sentences} sentences · ${review.stats.cacheHits} cached${
     review.appliedCount ? ` · ${review.appliedCount} applied` : ""
   }${review.dismissedCount ? ` · ${review.dismissedCount} dismissed` : ""}${
-    review.applyMode === "self" ? ' · <strong class="readonly">read-only — you fix your own text</strong>' : ""
+    review.applyMode === "self" ? ' · <strong class="readonly">read-only — you fix your own text</strong>' : ' · <strong class="ok-mode">assist — one click per fix</strong>'
   }</p>
+  <div class="head-actions">${applyToggle}</div>
 </header>`);
   if (review.suggestions.length === 0) {
     parts.push(`<div class="empty">No pending suggestions. 🎉</div>`);
@@ -537,6 +542,10 @@ function wireEvents(): void {
           return;
         case "apply":
           post({ type: "apply", id: id! });
+          return;
+        case "toggleApplyMode":
+          btn.disabled = true;
+          post({ type: "toggleApplyMode" });
           return;
         case "applyOcc":
           post({ type: "apply", id: id!, occurrence: Number(btn.dataset["occ"]) });

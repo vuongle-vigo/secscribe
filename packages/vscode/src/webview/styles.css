@@ -29,6 +29,8 @@ body {
 .head .file { color: var(--muted); font-weight: normal; }
 .head .meta { margin: 0 0 12px; color: var(--muted); }
 .readonly { color: var(--minor); }
+.ok-mode { color: var(--ins); }
+.head-actions { margin: -6px 0 10px; }
 
 .item {
   border: 1px solid var(--border);

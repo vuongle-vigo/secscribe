@@ -2,7 +2,7 @@
   "name": "secscribe",
   "displayName": "SecScribe",
   "description": "English review and vocabulary coach for security blog posts (read-only suggestions panel)",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "license": "MIT",
   "publisher": "secscribe",
   "engines": {
