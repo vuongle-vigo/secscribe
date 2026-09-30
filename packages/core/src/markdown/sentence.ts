@@ -54,9 +54,14 @@ function buildUnits(paragraphLines: string[], paragraphStart: number): Unit[] {
     const offsets: number[] = [];
     for (let i = 0; i < content.length; i++) offsets.push(off + contentStart + i);
 
+    // A chunk that starts right after a code fence/frontmatter begins with
+    // "\n": its first line is empty. Never join onto an empty carry — the
+    // joining space would become leading whitespace and chop the first
+    // character of the sentence (and poison its offset mapping).
+    const carryUsable = carry !== null && carry.text.trim() !== "";
     const needsJoin =
-      carry !== null &&
-      !SENTENCE_END_RE.test(carry.text.trimEnd()) &&
+      carryUsable &&
+      !SENTENCE_END_RE.test(carry!.text.trimEnd()) &&
       !isHeading &&
       !isTable &&
       prefix === null &&
@@ -68,12 +73,12 @@ function buildUnits(paragraphLines: string[], paragraphStart: number): Unit[] {
       carry.offsets.push(carry.offsets[carry.offsets.length - 1]!);
       carry.offsets.push(...offsets);
     } else {
-      if (carry) units.push(carry);
+      if (carryUsable && carry) units.push(carry);
       carry = { text: content, offsets, isTable };
     }
     off += raw.length + 1; // + newline
   }
-  if (carry) units.push(carry);
+  if (carry && carry.text.trim() !== "") units.push(carry);
   return units;
 }
 
@@ -102,7 +107,8 @@ export function splitSentences(md: MaskedDocument): Sentence[] {
         if (!text || !/\p{L}/u.test(text) || text.length < 3) continue;
         const lead = unit.text.length - unit.text.trimStart().length;
 
-        let sentenceBegin = lead;
+        // Indices into the trimmed text map into unit.text by adding `lead`.
+        let sentenceBegin = 0;
         const splitRe = /([.!?…])(\s+)(?=[^a-z\s])/g;
         let sm: RegExpExecArray | null;
         while ((sm = splitRe.exec(text)) !== null) {
@@ -115,10 +121,11 @@ export function splitSentences(md: MaskedDocument): Sentence[] {
         function emitSentence(s: string, textStart: number) {
           const t = s.trim();
           if (!t || !/\p{L}/u.test(t) || t.length < 3) return;
-          const firstCharIdx = textStart + (s.length - s.trimStart().length);
-          const maskedIdx = unit.offsets[firstCharIdx]!;
-          // chunk.map values are absolute original offsets already.
-          const originalOffset = chunk.map[maskedIdx]!;
+          const firstCharIdx = lead + textStart + (s.length - s.trimStart().length);
+          const maskedIdx = unit.offsets[firstCharIdx];
+          if (maskedIdx === undefined) return; // defensive: unmappable start
+          const originalOffset = chunk.map[maskedIdx];
+          if (originalOffset === undefined) return;
           sentences.push({
             text: t,
             line: offsetToLine(starts, originalOffset),

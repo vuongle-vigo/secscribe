@@ -62,6 +62,28 @@ describe("sentence splitting", () => {
     expect(sentences("| a | b |\n|---|---|\n| 1 | 2 |")).toEqual([]);
   });
 
+  it("keeps the first character of prose directly after a code fence (no empty-line join)", () => {
+    const doc = "---\ntitle: T\n---\nThey are scanning the subnet. We stopped them.\n\n```bash\nnmap\n```\nAlso fine here. Second one.\n";
+    const md = maskDocument(doc);
+    const ss = splitSentences(md);
+    const texts = ss.map((s) => s.text);
+    expect(texts).toContain("They are scanning the subnet.");
+    expect(texts).toContain("We stopped them.");
+    expect(texts).toContain("Also fine here.");
+    // every sentence remains a verbatim substring of the masked document
+    for (const s of ss) expect(md.masked.includes(s.text)).toBe(true);
+    // and the line numbers point at the right lines
+    expect(ss.find((s) => s.text.startsWith("They are"))!.line).toBe(4);
+    expect(ss.find((s) => s.text.startsWith("Also fine"))!.line).toBe(9);
+  });
+
+  it("soft-wrapped prose right after a fence keeps every first character", () => {
+    const doc = "```bash\nnmap\n```\nThey are scanning\nthe subnet. We stopped.\n";
+    const texts = splitSentences(maskDocument(doc)).map((s) => s.text);
+    expect(texts).toContain("They are scanning the subnet.");
+    expect(texts).toContain("We stopped.");
+  });
+
   it("sentence hashes are stable and content-derived", () => {
     const a = splitSentences(maskDocument("Same text here. Different text."))
       .find((s) => s.text === "Same text here.")!;
