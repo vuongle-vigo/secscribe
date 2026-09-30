@@ -235,10 +235,10 @@ suite("SecScribe M3 smoke", () => {
     const editor = await showPost();
     await vscode.commands.executeCommand("secscribe.reviewFile");
     const state = await waitFor(
-      (s) => (s.payload?.suggestions.some((x) => x.id === "wrap1") ?? false),
+      (s) => (s.payload?.suggestions.some((x) => x.id.startsWith("wrap1·")) ?? false),
       "wrap suggestion present",
     );
-    const wrap = state.payload!.suggestions.find((x) => x.id === "wrap1")!;
+    const wrap = state.payload!.suggestions.find((x) => x.id.startsWith("wrap1·"))!;
     // The sentence STARTS on line 11; the quoted fragment sits on line 12 —
     // display, gutter dot, and goto must all point at the fragment.
     assert.strictEqual(wrap.line, 12, "line points at the quoted fragment, not the sentence start");

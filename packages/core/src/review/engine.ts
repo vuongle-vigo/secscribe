@@ -264,6 +264,7 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
   // sentence containing its quote (fallback: the batch's first sentence) and
   // dedupe by (id, quote) so a batch reply is never emitted twice.
   const seenSuggestions = new Set<string>();
+  const emittedIds = new Set<string>();
   const seenVocab = new Set<string>();
   for (const { sentences: batchSentences, suggestions: rawSuggestions, vocabulary: rawVocab } of results.values()) {
     const first = batchSentences[0]!;
@@ -277,9 +278,17 @@ export async function reviewDocument(opts: ReviewOptions): Promise<ReviewResult>
         continue;
       }
       seenSuggestions.add(key);
+      // Models restart their ids ("s1", "s2"…) in every batch, so a long
+      // post yields duplicate ids — and id-based lookups (panel clicks,
+      // history) would always resolve to the first batch. Make ids unique
+      // and stable across runs: model id + owning sentence hash.
+      let uniqueId = `${raw.id}·${owner.hash.slice(0, 8)}`;
+      let dedupe = 2;
+      while (emittedIds.has(uniqueId)) uniqueId = `${raw.id}·${owner.hash.slice(0, 8)}·${dedupe++}`;
+      emittedIds.add(uniqueId);
       const match = findQuote(text, raw.original_quote);
       suggestions.push({
-        id: raw.id,
+        id: uniqueId,
         category: raw.category,
         severity: raw.severity,
         originalQuote: raw.original_quote,

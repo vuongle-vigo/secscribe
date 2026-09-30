@@ -332,6 +332,17 @@ fall back to the batch's first sentence — often the heading). Display,
 gutter dot, and go-to now all use the first occurrence line of the quote
 (`match.lines[0]`), falling back to the sentence line for stale quotes.
 
+## Suggestion ids are unique per document
+
+Models restart their ids ("s1", "s2"…) in every batch. A long post spans
+several batches, so the panel carried duplicate ids — and id-based lookups
+(go-to-line, copy, dismiss, apply) silently resolved to the FIRST item with
+that id, which lives in batch one near the top of the file. Found on a real
+298-line post: 8 batches, 14 suggestions, 12 duplicate ids — every click
+jumped to line 11. The engine now mints stable unique ids
+(`<model id>·<owning sentence hash>`, with a numeric disambiguator on rare
+collisions), which also makes history `suggestionId` records unambiguous.
+
 ## Testing
 
 - **Property test** uses an adversarial in-process LLM (seeded PRNG) that

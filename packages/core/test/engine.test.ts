@@ -186,7 +186,8 @@ describe("review engine (spec §6)", () => {
         llm: undefined as never,
       });
       const ids = result.suggestions.map((s) => s.id);
-      expect(ids).toEqual(["ok1"]);
+      expect(ids).toHaveLength(1);
+      expect(ids[0]!.startsWith("ok1·")).toBe(true);
       expect(result.stats.rejectedSuggestions).toBe(2);
     } finally {
       await fake.close();
@@ -276,6 +277,54 @@ describe("review engine (spec §6)", () => {
 
   it("prompt version is derived from the system prompt file", () => {
     expect(promptVersion()).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it("suggestion ids stay unique across batches (models restart ids per batch)", async () => {
+    const sentences = Array.from({ length: 12 }, (_, i) => `Sentence number ${i} contains unique words.`).join(" ");
+    // Stateless: derive the quotes from the batch's own sentences so every
+    // run of the review produces identical replies.
+    const fake = await startFakeServer((req) => {
+      const user = [...req.body.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+      const batchSentences = user
+        .split("\n")
+        .filter((l) => /^\[\d+\] /.test(l))
+        .map((l) => l.replace(/^\[\d+\] /, ""));
+      const mk = (i: number, id: string) => ({
+        id,
+        category: "grammar",
+        severity: "error",
+        original_quote: batchSentences[i]!.split(/\s+/).slice(0, 3).join(" "),
+        replacement: batchSentences[i]!.split(/\s+/).slice(0, 3).join(" ") + " FIXED",
+        reason_en: "x",
+        reason_vi: "x",
+        alternatives: [],
+      });
+      return completion(JSON.stringify({ suggestions: [mk(0, "s1"), mk(1, "s2")], vocabulary: [] }));
+    });
+    try {
+      const result = await reviewDocument({
+        text: sentences,
+        file: "long.md",
+        config: config({ baseUrl: fake.url }),
+        cache: new ReviewCache(null),
+        llm: undefined as never,
+      });
+      expect(result.stats.batchesSent).toBe(2);
+      expect(result.suggestions.length).toBeGreaterThanOrEqual(4);
+      const ids = result.suggestions.map((s) => s.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      // stable across a rerun (same input → same ids)
+      const again = await reviewDocument({
+        text: sentences,
+        file: "long.md",
+        config: config({ baseUrl: fake.url }),
+        cache: new ReviewCache(null),
+        llm: undefined as never,
+      });
+      expect(again.suggestions.map((s) => s.id)).toEqual(ids);
+    } finally {
+      await fake.close();
+    }
   });
 
   it("works fully offline when every sentence is cached", async () => {
