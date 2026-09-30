@@ -70,6 +70,17 @@ function flipFirst(s: string): string {
   return (first === first.toUpperCase() ? first.toLowerCase() : first.toUpperCase()) + rest;
 }
 
+/** Parse a completion body produced by `completion()` back into its JSON object. */
+export function parseCompletion(body: string): { suggestions: unknown[]; vocabulary: unknown[] } | null {
+  try {
+    const outer = JSON.parse(body) as { choices?: Array<{ message?: { content?: string } }> };
+    const inner = JSON.parse(outer.choices?.[0]?.message?.content ?? "");
+    return { suggestions: inner.suggestions ?? [], vocabulary: inner.vocabulary ?? [] };
+  } catch {
+    return null;
+  }
+}
+
 /** Canned bilingual definition for `Define the term: X` requests. */
 export function defineCompletion(term: string): string {
   return completion(

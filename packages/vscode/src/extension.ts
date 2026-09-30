@@ -149,7 +149,9 @@ function activateInner(context: vscode.ExtensionContext): void {
       ...new Set(
         lastRun.result.suggestions
           .filter((s) => !dismissed.has(s.id) && !applied.has(s.id) && s.match.status !== "stale")
-          .map((s) => s.line),
+          // Gutter dot on the quoted text's line (first occurrence), which
+          // can differ from the sentence's start line for soft-wrapped prose.
+          .map((s) => s.match.lines[0] ?? s.line),
       ),
     ].sort((a, b) => a - b);
     decorations.apply(editor, lines);

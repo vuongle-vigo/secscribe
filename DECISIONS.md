@@ -322,6 +322,16 @@ background auto-define pushing a vocabulary payload mid-question) and is
 cleared when the card changes. Verdicts are ephemeral (not history
 records — §10 has no study-answer action).
 
+## Go-to-line targets the quoted text, not the sentence start
+
+Some items jumped to the wrong line: the panel used the OWNING SENTENCE's
+start line, which differs from the quoted text's line for soft-wrapped
+sentences (sentence starts on line N, the error fragment sits on N+1) and
+for suggestions whose quote could not be attributed to a sentence (they
+fall back to the batch's first sentence — often the heading). Display,
+gutter dot, and go-to now all use the first occurrence line of the quote
+(`match.lines[0]`), falling back to the sentence line for stale quotes.
+
 ## Testing
 
 - **Property test** uses an adversarial in-process LLM (seeded PRNG) that

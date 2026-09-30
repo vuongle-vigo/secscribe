@@ -231,6 +231,22 @@ suite("SecScribe M3 smoke", () => {
     assert.strictEqual(rows.length, vocabCount, "one row per card");
   });
 
+  test("goto jumps to the quoted text's line for soft-wrapped sentences", async () => {
+    const editor = await showPost();
+    await vscode.commands.executeCommand("secscribe.reviewFile");
+    const state = await waitFor(
+      (s) => (s.payload?.suggestions.some((x) => x.id === "wrap1") ?? false),
+      "wrap suggestion present",
+    );
+    const wrap = state.payload!.suggestions.find((x) => x.id === "wrap1")!;
+    // The sentence STARTS on line 11; the quoted fragment sits on line 12 —
+    // display, gutter dot, and goto must all point at the fragment.
+    assert.strictEqual(wrap.line, 12, "line points at the quoted fragment, not the sentence start");
+    assert.ok(state.decoratedLines.includes(12), "gutter dot on the quoted line");
+    await post({ type: "goto", id: wrap.id, line: wrap.line });
+    assert.strictEqual(editor.selection.active.line, 11, "cursor moved to the quote's line (0-based)");
+  });
+
   test("sidebar: vocabulary + study live in the activity-bar view; review has a keybinding", async () => {
     // Manifest: the review command is bound to a chord for markdown files.
     const extRoot = process.env["SECSRIBE_TEST_EXT"] ?? "";

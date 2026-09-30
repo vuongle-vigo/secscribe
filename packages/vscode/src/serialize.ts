@@ -58,7 +58,11 @@ export function toPanelPayload(
         id: s.id,
         category: s.category,
         severity: s.severity,
-        line: s.line,
+        // Display/go-to line = where the quoted text actually sits (first
+        // occurrence), falling back to the sentence's start line. Sentences
+        // that soft-wrap or get attributed to an earlier sentence otherwise
+        // jump to the wrong place.
+        line: s.match.lines[0] ?? s.line,
         matchStatus: s.match.status,
         matchLines: s.match.lines,
         original: s.originalQuote,

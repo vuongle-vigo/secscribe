@@ -9,7 +9,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 // Cross-package import of the core fake-server test helper; esbuild inlines
 // it at bundle time.
-import { startFakeServer, echoResponder, withDefine } from "../../../core/test/helpers/fake-server";
+import {
+  startFakeServer,
+  echoResponder,
+  withDefine,
+  completion,
+  parseCompletion,
+  type Responder,
+} from "../../../core/test/helpers/fake-server";
 
 const PKG_ROOT = join(__dirname, "..", "..");
 
@@ -23,10 +30,35 @@ const FIXTURE_POST = [
   "```",
   "",
   "We performed reconnaissance on the subnet.",
+  "",
+  "The final paragraph wraps",
+  "across two soft lines. Tail sentence.",
 ].join("\n");
 
+/** Extra suggestion whose quote sits on the SECOND line of a wrapped sentence. */
+function wrapResponder(base: Responder): Responder {
+  return (req, i) => {
+    const body = base(req, i);
+    const user = [...req.body.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    if (!user.includes("The final paragraph wraps across two soft lines.")) return body;
+    const parsed = parseCompletion(body);
+    if (!parsed) return body;
+    parsed.suggestions.push({
+      id: "wrap1",
+      category: "word-choice",
+      severity: "minor",
+      original_quote: "across two soft lines",
+      replacement: "over two soft lines",
+      reason_en: "Fragment on the second line of a soft-wrapped sentence.",
+      reason_vi: "Đoạn văn nằm ở dòng thứ hai của câu xuống dòng.",
+      alternatives: [],
+    });
+    return completion(JSON.stringify(parsed));
+  };
+}
+
 async function main(): Promise<void> {
-  const server = await startFakeServer(withDefine(echoResponder()));
+  const server = await startFakeServer(withDefine(wrapResponder(echoResponder())));
   let exitCode = 0;
   try {
     const ws = join(tmpdir(), `secscribe-vscode-test-${Date.now()}`);
